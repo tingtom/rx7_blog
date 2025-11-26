@@ -30,7 +30,7 @@ export default async function ModelPage({
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
           {/* Hero Section */}
           <div className="relative h-[40vh] min-h-[300px]">
-            {model.previewImage && (
+            {model?.previewImage && (
               <Image
                 src={urlFor(model.previewImage).url()}
                 alt={model.title}
@@ -40,14 +40,11 @@ export default async function ModelPage({
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
             <div className="absolute bottom-0 left-0 right-0 p-8">
-              <h1 className="text-4xl font-bold text-white mb-2">{model.title}</h1>
+              <h1 className="text-4xl font-bold text-white mb-2">{model?.title}</h1>
               <div className="flex items-center gap-4">
-                <span className="bg-red-500 text-white px-3 py-1 rounded-full text-sm">
+                {model?.category && <span className="bg-red-500 text-white px-3 py-1 rounded-full text-sm">
                   {model.category}
-                </span>
-                <span className="text-gray-200">
-                  {model.downloadCount} downloads
-                </span>
+                </span>}
               </div>
             </div>
           </div>
@@ -57,19 +54,19 @@ export default async function ModelPage({
             <div className="max-w-4xl mx-auto">
               {/* 3D Viewer */}
               <div className="mb-8">
-                <Model3DViewer modelUrl={model.modelFile} />
+                <Model3DViewer modelUrl={model?.modelFile} />
               </div>
 
               {/* Description */}
               <div className="prose max-w-none">
                 <h2 className="text-2xl font-bold mb-4">About this model</h2>
-                <p className="text-gray-700 whitespace-pre-wrap">{model.description}</p>
+                <p className="text-gray-700 whitespace-pre-wrap">{model?.description}</p>
               </div>
 
               {/* Download Button */}
               <div className="mt-8">
                 <a
-                  href={model.modelFile}
+                  href={model?.modelFile}
                   download
                   className="inline-flex items-center justify-center px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-lg font-semibold gap-2"
                 >

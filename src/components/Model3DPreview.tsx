@@ -44,7 +44,6 @@ export default function Model3DPreview({
           <p className="text-gray-700 text-sm mb-4">{description}</p>
           <div className="flex justify-between items-center">
             <span className="text-gray-600 text-sm">
-              {downloadCount} downloads
             </span>
             <span className="text-red-600 hover:text-red-800 font-medium">
               View Model →
