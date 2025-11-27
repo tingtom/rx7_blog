@@ -10,24 +10,8 @@ export default function AboutPage() {
           technical guides, and 3D printable parts for the community.
         </p>
         
-        <h2 className="text-2xl font-bold text-gray-900 mt-12 mb-4">Our Mission</h2>
         <p className="text-gray-700 mb-8">
-          To create and share knowledge, tools, and resources that help FD3S owners maintain,
-          modify, and enjoy their vehicles while building a supportive community.
-        </p>
-
-        <h2 className="text-2xl font-bold text-gray-900 mt-12 mb-4">What We Offer</h2>
-        <ul className="list-disc list-inside text-gray-700 space-y-4 mb-8">
-          <li>Detailed technical guides and documentation</li>
-          <li>3D printable parts and modifications</li>
-          <li>Community knowledge sharing</li>
-          <li>Regular updates and new content</li>
-        </ul>
-
-        <h2 className="text-2xl font-bold text-gray-900 mt-12 mb-4">Get Involved</h2>
-        <p className="text-gray-700">
-          We&apos;re always looking for contributors and community members. If you&apos;d like to share your
-          knowledge or contribute 3D models, please reach out to us.
+          A small personal blog with some technical information and RX7 3d prints.
         </p>
       </div>
     </div>

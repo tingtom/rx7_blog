@@ -14,7 +14,7 @@ async function getLatestContent() {
   `);
 
   const models = await sanityFetch<any[]>(`
-    *[_type == "model3d"] | order(publishedAt desc)[0...3] {
+    *[_type == "model3d" && defined(publishedAt)] | order(publishedAt desc)[0...3] {
       title,
       slug,
       previewImage,
@@ -95,6 +95,9 @@ export default async function Home() {
             {models.map((model) => (
               <Model3DPreview key={model.slug.current} {...model} />
             ))}
+            {models.length === 0 && (
+              <p className="text-gray-600">No 3D models have been added yet.</p>
+            )}
           </div>
         </section>
       </div>

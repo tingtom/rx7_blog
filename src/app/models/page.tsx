@@ -3,7 +3,7 @@ import Model3DPreview from '@/components/Model3DPreview';
 
 export default async function ModelsPage() {
   const models = await sanityFetch<any[]>(`
-    *[_type == "model3d"] | order(publishedAt desc) {
+    *[_type == "model3d" && defined(publishedAt)] | order(publishedAt desc) {
       title,
       slug,
       previewImage,
@@ -22,6 +22,9 @@ export default async function ModelsPage() {
         {models.map((model) => (
           <Model3DPreview key={model.slug.current} {...model} />
         ))}
+        {models.length === 0 && (
+          <p className="text-gray-600">No 3D models have been added yet.</p>
+        )}
       </div>
     </div>
   );

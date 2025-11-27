@@ -5,7 +5,7 @@ import Model3DViewer from '@/components/Model3DViewer';
 
 async function getModel(slug: string) {
   return await sanityFetch<any>(`
-    *[_type == "model3d" && slug.current == $slug][0] {
+    *[_type == "model3d" && defined(publishedAt) && slug.current == $slug][0] {
       title,
       description,
       modelFile,
