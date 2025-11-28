@@ -12,7 +12,7 @@ const nextConfig = {
     unoptimized: true, // Required for static export
   },
   // Handle GitHub Pages path prefix
-  basePath: process.env.NODE_ENV === 'production' ? '/rx7_blog' : '',
+  basePath: '',
 }
 
 module.exports = nextConfig
