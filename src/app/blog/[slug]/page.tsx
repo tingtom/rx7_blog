@@ -1,5 +1,5 @@
 import { sanityFetch } from '@/lib/sanity';
-import { PortableText } from '@portabletext/react';
+import { PortableText, PortableTextReactComponents } from '@portabletext/react';
 import Image from 'next/image';
 import { urlFor } from '@/lib/sanity';
 
@@ -8,7 +8,14 @@ interface Post {
   mainImage: any;
   body: any[];
   publishedAt: string;
+  tags?: string[];
 }
+
+const components: PortableTextReactComponents = {
+  block: {
+    normal: ({ children }) => <p className="mb-4">{children}</p>,
+  },
+} as unknown as PortableTextReactComponents
 
 export default async function BlogPost({ params }: { params: { slug: string } }) {
   const post = await sanityFetch<Post>(`
@@ -16,7 +23,8 @@ export default async function BlogPost({ params }: { params: { slug: string } })
       title,
       mainImage,
       body,
-      publishedAt
+      publishedAt,
+      tags
     }
   `, { slug: params.slug });
 
@@ -30,13 +38,25 @@ export default async function BlogPost({ params }: { params: { slug: string } })
         <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
           {post.title}
         </h1>
-        <time className="text-gray-600">
-          {new Date(post.publishedAt).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          })}
-        </time>
+        <div className="flex items-center justify-between">
+          <time className="text-gray-600">
+            {new Date(post.publishedAt).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}
+          </time>
+          <div>
+            {post.tags && post.tags.map((tag: string) => (
+              <span
+                key={tag}
+                className="inline-block mr-2 bg-gray-900 uppercase text-white text-xs px-2 py-1 rounded"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
       </header>
 
       {post.mainImage && (
@@ -52,7 +72,7 @@ export default async function BlogPost({ params }: { params: { slug: string } })
       )}
 
       <div className="prose prose-lg max-w-none">
-        <PortableText value={post.body} />
+        <PortableText components={components} value={post.body} />
       </div>
     </article>
   );
