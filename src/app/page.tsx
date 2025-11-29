@@ -31,7 +31,7 @@ export default async function Home() {
   const { posts, models } = await getLatestContent();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+    <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative h-[80vh] min-h-[600px] flex items-center justify-center overflow-hidden bg-black">
         <div 
