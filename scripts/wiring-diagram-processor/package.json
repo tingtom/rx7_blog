@@ -1,0 +1,19 @@
+{
+  "name": "wiring-diagram-processor",
+  "version": "1.0.0",
+  "description": "AI-powered tool to extract metadata from RX-7 wiring diagrams",
+  "main": "cli.js",
+  "bin": {
+    "process-wiring": "./cli.js"
+  },
+  "scripts": {
+    "process": "node cli.js"
+  },
+  "keywords": ["rx7", "wiring", "sanity", "ai", "vision"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "inquirer": "^9.2.0",
+    "minimist": "^1.2.8"
+  }
+}

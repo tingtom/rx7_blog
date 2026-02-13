@@ -44,6 +44,9 @@ export default function Header() {
             <Link href="/models" className="hover:text-red-500 transition-colors">
               3D Models
             </Link>
+            <Link href="/wiring" className="hover:text-red-500 transition-colors">
+              Wiring
+            </Link>
             <Link href="/about" className="hover:text-red-500 transition-colors">
               About
             </Link>
@@ -66,6 +69,13 @@ export default function Header() {
               onClick={() => setIsMenuOpen(false)}
             >
               3D Models
+            </Link>
+            <Link
+              href="/wiring"
+              className="block hover:text-red-500 transition-colors"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Wiring
             </Link>
             <Link
               href="/about"

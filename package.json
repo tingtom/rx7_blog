@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "process-wiring": "node scripts/wiring-diagram-processor/cli.js"
   },
   "dependencies": {
     "@portabletext/react": "3.0.4",
