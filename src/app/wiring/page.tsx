@@ -23,10 +23,11 @@ export default async function WiringPage({
   const query = searchParams.q || '';
   const categoryFilter = searchParams.category || 'all';
   
-  // Fetch all distinct categories for the dropdown
-  const allCategories: string[] = await sanityFetch(`
-    *[_type == "wiringDiagram" && defined(category)] | distinct(category)
-  `);
+  // Fetch all wiring diagrams with categories (we'll deduplicate in TypeScript)
+  const allWiringDiagrams = await sanityFetch<Array<{ category?: string }>>(
+    `*[_type == "wiringDiagram" && defined(category)] { category }`
+  );
+  const allCategories = [...new Set(allWiringDiagrams.map(d => d.category).filter(Boolean))].sort();
   
   // Build GROQ query with dynamic search across multiple fields
   const conditions: string[] = [];
