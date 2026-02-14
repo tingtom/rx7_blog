@@ -5,8 +5,9 @@ Extract structured metadata from Mazda RX-7 FD3S wiring diagrams using AI vision
 ## Features
 
 - Processes PNG, JPG, GIF, WebP, SVG images
-- Uses GPT-4 Turbo, Claude 3.5 Sonnet, or OpenRouter models
+- Uses GPT-4 Turbo, Claude 3.5 Sonnet, or OpenRouter models for analysis
 - Extracts: wire colors, components, connectors, ECU pins, category, year range
+- Optional second-pass translation using a dedicated text model
 - Translates Japanese text to English
 - Interactive review for low-confidence extractions
 - Outputs individual JSON files ready for Sanity import
@@ -59,6 +60,19 @@ node cli.js --input ./diagrams-to-process --output ./processed-diagrams
 
 4. Output: Individual JSON files in `./processed-diagrams/`
 
+## Two-Pass Translation (Optional)
+
+If your diagrams contain Japanese text, you can enable a second translation pass that uses a dedicated text model to refine translations:
+
+1. Set `enableTranslation: true` in `config.js`
+2. Choose a translation model (text-only, e.g., `gpt-4o-mini`) via `translationModel`
+3. The script will:
+   - First analyze the image with the vision model to extract structured data
+   - Then run the translation model on the extracted text fields to improve Japanese → English translation
+   - Merge the translated text back into the final JSON
+
+This separation allows you to use a powerful vision model for extraction and a cheaper/faster text model for translation.
+
 ## Workflow
 
 1. 📁 Upload images to **Sanity Assets** via Sanity Studio
@@ -84,11 +98,18 @@ Options are read from `config.js`, but can be overridden via CLI arguments if ne
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `provider` | `'openrouter'` | AI provider: 'openai', 'anthropic', 'openrouter' |
-| `model` | `'openai/gpt-4-turbo'` | Model identifier (varies by provider) |
+| `provider` | `'openrouter'` | Primary analysis AI provider: 'openai', 'anthropic', 'openrouter' |
+| `model` | `'openai/gpt-4-turbo'` | Model for analysis (must support vision) |
+| `openaiApiKey` | `process.env.OPENAI_API_KEY` | OpenAI API key |
+| `anthropicApiKey` | `process.env.ANTHROPIC_API_KEY` | Anthropic API key |
 | `openrouterApiKey` | `process.env.OPENROUTER_API_KEY` | OpenRouter API key |
-| `confidenceThreshold` | `0.8` | Auto-accept above this (0-1) |
+| `openrouterReferer` | `'https://rx7.pro'` | Referer for OpenRouter analytics |
+| `openrouterAppName` | `'RX7 Wiring Processor'` | App name for OpenRouter |
+| `confidenceThreshold` | `0.8` | Auto-accept above this confidence (0-1) |
 | `deduplicateArrays` | `true` | Remove duplicate entries in arrays |
+| `enableTranslation` | `false` | Enable second-pass translation |
+| `translationProvider` | Same as `provider` | Provider for translation (openai, anthropic, openrouter) |
+| `translationModel` | `'openai/gpt-4o-mini'` | Text-only model for translation (cheaper) |
 
 ## Output JSON Structure
 

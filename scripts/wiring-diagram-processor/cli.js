@@ -1,14 +1,14 @@
-#!/usr/bin/env node
-
 const inquirer = require('inquirer');
 const path = require('path');
 const fs = require('fs');
 const VisionClient = require('./visionClient');
+const TranslationClient = require('./translationClient');
 const config = require('./config');
 
 class WiringDiagramProcessor {
   constructor() {
     this.client = new VisionClient(config);
+    this.translator = config.enableTranslation ? new TranslationClient(config) : null;
     this.stats = { processed: 0, skipped: 0, errors: 0 };
   }
   
@@ -57,27 +57,39 @@ class WiringDiagramProcessor {
   }
   
   async processImage(imagePath, outputPath) {
-    const data = await this.client.analyzeImage(imagePath);
+    let data = await this.client.analyzeImage(imagePath);
     
-    // Ensure arrays are arrays and deduplicate if configured
+    // Run translation if enabled
+    if (this.translator) {
+      try {
+        console.log('  Translating...');
+        const translated = await this.translator.translateFields(data);
+        // Merge translated fields, overriding originals
+        data = { ...data, ...translated };
+      } catch (err) {
+        console.warn(`  Translation failed: ${err.message}. Using original analysis.`);
+      }
+    }
+    
+    // Build result object
     const result = {
       ...data,
       imageFilename: path.basename(imagePath),
       processedAt: new Date().toISOString(),
-      _type: 'wiringDiagram'
+      _type: 'wiringDiagram',
     };
     
     // Deduplicate arrays if configured
     if (config.deduplicateArrays) {
-      ['wireColors', 'components', 'connectors', 'ecuPins'].forEach(field => {
+      ['wireColors', 'components', 'connectors', 'ecuPins'].forEach((field) => {
         if (Array.isArray(result[field])) {
-          result[field] = [...new Set(result[field].map(String).map(s => s.trim()))].filter(Boolean);
+          result[field] = [...new Set(result[field].map(String).map((s) => s.trim()))].filter(Boolean);
         }
       });
     }
     
     // Review if confidence is low
-    const needsReview = data.confidence < config.confidenceThreshold;
+    const needsReview = (result.confidence || 0) < config.confidenceThreshold;
     
     if (needsReview) {
       const edited = await this.reviewResult(result);

@@ -1,11 +1,6 @@
 module.exports = {
-  // Provider: 'openai', 'anthropic', or 'openrouter'
+  // Primary analysis provider and model
   provider: 'openrouter',
-  
-  // Model based on provider:
-  // OpenAI: 'gpt-4-turbo', 'gpt-4o', 'gpt-4-vision-preview'
-  // Anthropic: 'claude-3-5-sonnet-20241022', 'claude-3-opus'
-  // OpenRouter: 'openai/gpt-4-turbo', 'anthropic/claude-3.5-sonnet', etc.
   model: 'openai/gpt-4-turbo',
   
   // API keys (set via environment variables)
@@ -16,6 +11,12 @@ module.exports = {
   // OpenRouter-specific settings
   openrouterReferer: process.env.OPENROUTER_REFERER || 'https://rx7.pro',
   openrouterAppName: process.env.OPENROUTER_APP_NAME || 'RX7 Wiring Processor',
+  
+  // Translation settings (optional second pass)
+  enableTranslation: false, // Set true to run translation model after analysis
+  translationProvider: 'openrouter', // Can be same or different provider
+  translationModel: 'openai/gpt-4o-mini', // Cheaper text-only model
+  // Translation uses same API keys as primary (but could be separate)
   
   // Processing settings
   confidenceThreshold: 0.8,
