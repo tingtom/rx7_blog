@@ -5,10 +5,10 @@ Extract structured metadata from Mazda RX-7 FD3S wiring diagrams using AI vision
 ## Features
 
 - Processes PNG, JPG, GIF, WebP, SVG images
-- Uses GPT-4 Turbo, Claude 3.5 Sonnet, or OpenRouter models for analysis
+- Uses GPT-4 Turbo, Claude 3.5 Sonnet, or OpenRouter models
+- Two-pass processing: analysis extraction + optional translation with separate model
 - Extracts: wire colors, components, connectors, ECU pins, category, year range
-- Optional second-pass translation using a dedicated text model
-- Translates Japanese text to English
+- Translates Japanese text to English (using a second vision model if enabled)
 - Interactive review for low-confidence extractions
 - Outputs individual JSON files ready for Sanity import
 
@@ -41,10 +41,24 @@ export OPENROUTER_REFERER="https://rx7.pro"
 export OPENROUTER_APP_NAME="RX7 Wiring Processor"
 ```
 
-3. Edit `config.js` to choose provider and model:
+3. Edit `config.js` to configure models:
+
 ```javascript
-provider: 'openrouter',  // 'openai', 'anthropic', or 'openrouter'
-model: 'openai/gpt-4-turbo', // or 'anthropic/claude-3.5-sonnet'
+analysis: {
+  provider: 'openrouter',     // 'openai', 'anthropic', or 'openrouter'
+  model: 'openai/gpt-4-turbo',  // Vision model for extraction
+  openaiApiKey: process.env.OPENAI_API_KEY,
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+  openrouterApiKey: process.env.OPENROUTER_API_KEY,
+  // ... OpenRouter headers
+},
+
+translation: {
+  enabled: true,               // Set true to enable second translation pass
+  provider: 'openrouter',      // Can be same or different
+  model: 'openai/gpt-4o',      // Vision model capable of translation (can be same as analysis)
+  // ... same API keys
+}
 ```
 
 ## Usage
@@ -62,16 +76,17 @@ node cli.js --input ./diagrams-to-process --output ./processed-diagrams
 
 ## Two-Pass Translation (Optional)
 
-If your diagrams contain Japanese text, you can enable a second translation pass that uses a dedicated text model to refine translations:
+If your diagrams contain Japanese text, you can enable a second vision model that processes the same image and returns translated data:
 
-1. Set `enableTranslation: true` in `config.js`
-2. Choose a translation model (text-only, e.g., `gpt-4o-mini`) via `translationModel`
+1. Set `translation.enabled: true` in `config.js`
+2. Choose a model capable of translation (e.g., `openai/gpt-4o` or `anthropic/claude-3.5-sonnet`) via `translation.model`
 3. The script will:
-   - First analyze the image with the vision model to extract structured data
-   - Then run the translation model on the extracted text fields to improve Japanese → English translation
-   - Merge the translated text back into the final JSON
+   - First analyze the image with the **analysis model** to extract structured data
+   - Then run the **translation model** on the same image, using a translation-focused prompt
+   - Merge the results: text fields (title, description, components, connectors, ecuPins, notes) from the translation model replace those from analysis
+   - Output a single JSON file with translated content
 
-This separation allows you to use a powerful vision model for extraction and a cheaper/faster text model for translation.
+This allows you to use a powerful extraction model and a different (perhaps more fluent) translation model, both vision-capable.
 
 ## Workflow
 
@@ -96,20 +111,35 @@ Options are read from `config.js`, but can be overridden via CLI arguments if ne
 
 ## Configuration (`config.js`)
 
+The config now supports separate analysis and translation models:
+
+### Analysis Config
+
 | Option | Default | Description |
 |--------|---------|-------------|
-| `provider` | `'openrouter'` | Primary analysis AI provider: 'openai', 'anthropic', 'openrouter' |
-| `model` | `'openai/gpt-4-turbo'` | Model for analysis (must support vision) |
-| `openaiApiKey` | `process.env.OPENAI_API_KEY` | OpenAI API key |
-| `anthropicApiKey` | `process.env.ANTHROPIC_API_KEY` | Anthropic API key |
-| `openrouterApiKey` | `process.env.OPENROUTER_API_KEY` | OpenRouter API key |
-| `openrouterReferer` | `'https://rx7.pro'` | Referer for OpenRouter analytics |
-| `openrouterAppName` | `'RX7 Wiring Processor'` | App name for OpenRouter |
+| `analysis.provider` | `'openrouter'` | AI provider: 'openai', 'anthropic', 'openrouter' |
+| `analysis.model` | `'openai/gpt-4-turbo'` | Vision model for extraction |
+| `analysis.openrouterApiKey` | `process.env.OPENROUTER_API_KEY` | OpenRouter API key |
+| `analysis.openrouterReferer` | `'https://rx7.pro'` | Referer for OpenRouter |
+| `analysis.openrouterAppName` | `'RX7 Wiring Processor'` | App name for OpenRouter |
+
+### Translation Config
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `translation.enabled` | `false` | Enable second pass translation |
+| `translation.provider` | Same as analysis | Provider for translation model |
+| `translation.model` | `'openai/gpt-4o'` | Vision model for translation (must support vision) |
+| `translation.openrouterApiKey` | Uses analysis key | Override if needed |
+
+### Global Settings
+
+| Option | Default | Description |
+|--------|---------|-------------|
 | `confidenceThreshold` | `0.8` | Auto-accept above this confidence (0-1) |
 | `deduplicateArrays` | `true` | Remove duplicate entries in arrays |
-| `enableTranslation` | `false` | Enable second-pass translation |
-| `translationProvider` | Same as `provider` | Provider for translation (openai, anthropic, openrouter) |
-| `translationModel` | `'openai/gpt-4o-mini'` | Text-only model for translation (cheaper) |
+| `inputDir` | `'./diagrams-to-process'` | Input directory |
+| `outputDir` | `'./processed-diagrams'` | Output directory |
 
 ## Output JSON Structure
 

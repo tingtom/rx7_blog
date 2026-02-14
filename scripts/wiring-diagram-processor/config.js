@@ -1,22 +1,28 @@
 module.exports = {
-  // Primary analysis provider and model
-  provider: 'openrouter',
-  model: 'openai/gpt-4-turbo',
+  // Analysis model: extracts all fields from the image
+  analysis: {
+    provider: 'openrouter',
+    model: 'openai/gpt-4-turbo',
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    openrouterApiKey: process.env.OPENROUTER_API_KEY,
+    openrouterReferer: process.env.OPENROUTER_REFERER || 'https://rx7.pro',
+    openrouterAppName: process.env.OPENROUTER_APP_NAME || 'RX7 Wiring Processor',
+  },
   
-  // API keys (set via environment variables)
-  openaiApiKey: process.env.OPENAI_API_KEY,
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-  openrouterApiKey: process.env.OPENROUTER_API_KEY,
-  
-  // OpenRouter-specific settings
-  openrouterReferer: process.env.OPENROUTER_REFERER || 'https://rx7.pro',
-  openrouterAppName: process.env.OPENROUTER_APP_NAME || 'RX7 Wiring Processor',
-  
-  // Translation settings (optional second pass)
-  enableTranslation: false, // Set true to run translation model after analysis
-  translationProvider: 'openrouter', // Can be same or different provider
-  translationModel: 'openai/gpt-4o-mini', // Cheaper text-only model
-  // Translation uses same API keys as primary (but could be separate)
+  // Translation model: optional second vision pass to translate Japanese text
+  // If enabled, this model will process the same image and its text fields will override
+  // those from the analysis model.
+  translation: {
+    enabled: false,
+    provider: 'openrouter',
+    model: 'openai/gpt-4o', // Capable vision model for translation
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    openrouterApiKey: process.env.OPENROUTER_API_KEY,
+    openrouterReferer: process.env.OPENROUTER_REFERER || 'https://rx7.pro',
+    openrouterAppName: process.env.OPENROUTER_APP_NAME || 'RX7 Wiring Processor',
+  },
   
   // Processing settings
   confidenceThreshold: 0.8,

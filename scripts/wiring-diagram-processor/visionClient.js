@@ -1,8 +1,9 @@
 const fs = require('fs');
 
 class VisionClient {
-  constructor(config) {
+  constructor(config, customPrompt = null) {
     this.config = config;
+    this.customPrompt = customPrompt;
   }
   
   async analyzeImage(imagePath) {
@@ -126,6 +127,10 @@ class VisionClient {
   }
   
   getPrompt() {
+    // If a custom prompt is provided, use it; otherwise use default analysis prompt
+    if (this.customPrompt) {
+      return this.customPrompt;
+    }
     return `Analyze this Mazda RX-7 FD3S wiring diagram image. Translate any Japanese text to English.
 
 IMPORTANT: Return ONLY valid JSON with these exact keys. Do not include markdown or code block formatting.

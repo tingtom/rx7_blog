@@ -1,17 +1,48 @@
+#!/usr/bin/env node
+
 const inquirer = require('inquirer');
 const path = require('path');
 const fs = require('fs');
 const VisionClient = require('./visionClient');
-const TranslationClient = require('./translationClient');
 const config = require('./config');
+
+// Translation prompt specifically for translating Japanese to English
+const TRANSLATION_PROMPT = `You are a specialized translator for Japanese automotive wiring diagrams. Your task is to extract the SAME JSON structure as the analysis model, but with ALL Japanese text fully translated to English.
+
+IMPORTANT: Return ONLY valid JSON with these exact keys. Do not include markdown or code block formatting.
+
+{
+  "title": "English title (translate if Japanese)",
+  "wireColors": ["Red", "Black", ...], // keep colors as-is, they are usually universal
+  "components": ["ECU", "fuel pump", ...], // TRANSLATE all component names to English
+  "connectors": ["FPC", "EPC", ...], // TRANSLATE connector names (e.g., 接続端子 -> Connector Terminal)
+  "ecuPins": ["ECU pin 1", ...], // TRANSLATE any Japanese text, keep pin numbers
+  "category": "Engine/ECU", // Already in English, keep or refine
+  "yearRange": "1993-1995", // Already fine
+  "description": "English description (fully translated)",
+  "notes": "English notes (translate all Japanese text, keep symbols/numbers)",
+  "confidence": 0.95
+}
+
+Guidelines:
+- Focus on translating ALL Japanese text to natural English
+- Preserve numbers, wire color names, pin numbers, symbols exactly
+- For components/connectors: convert Japanese terms to standard RX-7 English terminology
+- If text is already English, keep it unchanged
+- Ensure translations are concise and accurate`;
 
 class WiringDiagramProcessor {
   constructor() {
-    this.client = new VisionClient(config);
-    this.translator = config.enableTranslation ? new TranslationClient(config) : null;
+    this.analysisClient = new VisionClient(config.analysis);
+    if (config.translation?.enabled) {
+      this.translationClient = new VisionClient(config.translation, TRANSLATION_PROMPT);
+      console.log('✓ Translation enabled using model:', config.translation.model);
+    } else {
+      this.translationClient = null;
+    }
     this.stats = { processed: 0, skipped: 0, errors: 0 };
   }
-  
+
   async processDirectory(inputDir, outputDir) {
     // Ensure output directory exists
     fs.mkdirSync(outputDir, { recursive: true });
@@ -49,60 +80,74 @@ class WiringDiagramProcessor {
         this.stats.errors++;
       }
     }
-    
-    console.log('\n===== Summary =====');
-    console.log(`Processed: ${this.stats.processed}`);
-    console.log(`Skipped: ${this.stats.skipped}`);
-    console.log(`Errors: ${this.stats.errors}`);
   }
   
   async processImage(imagePath, outputPath) {
-    let data = await this.client.analyzeImage(imagePath);
-    
-    // Run translation if enabled
-    if (this.translator) {
-      try {
+    try {
+      console.log('  Analyzing...');
+      const analysisData = await this.analysisClient.analyzeImage(imagePath);
+      
+      let data = analysisData;
+      if (this.translationClient) {
         console.log('  Translating...');
-        const translated = await this.translator.translateFields(data);
-        // Merge translated fields, overriding originals
-        data = { ...data, ...translated };
-      } catch (err) {
-        console.warn(`  Translation failed: ${err.message}. Using original analysis.`);
+        const translatedData = await this.translationClient.analyzeImage(imagePath);
+        // Merge: override text fields from analysis with translated ones
+        data = this.mergeResults(analysisData, translatedData);
       }
-    }
-    
-    // Build result object
-    const result = {
-      ...data,
-      imageFilename: path.basename(imagePath),
-      processedAt: new Date().toISOString(),
-      _type: 'wiringDiagram',
-    };
-    
-    // Deduplicate arrays if configured
-    if (config.deduplicateArrays) {
-      ['wireColors', 'components', 'connectors', 'ecuPins'].forEach((field) => {
-        if (Array.isArray(result[field])) {
-          result[field] = [...new Set(result[field].map(String).map((s) => s.trim()))].filter(Boolean);
+
+      // Deduplicate arrays if configured
+      if (config.deduplicateArrays) {
+        ['wireColors', 'components', 'connectors', 'ecuPins'].forEach((field) => {
+          if (Array.isArray(data[field])) {
+            data[field] = [...new Set(data[field].map(String).map((s) => s.trim()))].filter(Boolean);
+          }
+        });
+      }
+      
+      // Add metadata
+      const result = {
+        ...data,
+        imageFilename: path.basename(imagePath),
+        processedAt: new Date().toISOString(),
+        _type: 'wiringDiagram',
+      };
+      
+      // Review if confidence is low
+      const needsReview = (result.confidence || 0) < config.confidenceThreshold;
+      
+      if (needsReview) {
+        const edited = await this.reviewResult(result);
+        if (edited === null) {
+          console.log('  Skipped by user.');
+          return;
         }
-      });
-    }
-    
-    // Review if confidence is low
-    const needsReview = (result.confidence || 0) < config.confidenceThreshold;
-    
-    if (needsReview) {
-      const edited = await this.reviewResult(result);
-      if (edited === null) {
-        console.log('  Skipped by user.');
-        return;
+        Object.assign(result, edited);
       }
-      Object.assign(result, edited);
+      
+      // Save JSON
+      fs.writeFileSync(outputPath, JSON.stringify(result, null, 2));
+      console.log(`  ✓ Saved: ${outputPath}\n`);
+      
+    } catch (error) {
+      throw error;
+    }
+  }
+  
+  mergeResults(analysis, translation) {
+    // Fields to override from translation (text fields)
+    const textFields = ['title', 'description', 'notes', 'components', 'connectors', 'ecuPins'];
+    const merged = { ...analysis };
+    
+    for (const field of textFields) {
+      if (translation[field] !== undefined) {
+        merged[field] = translation[field];
+      }
     }
     
-    // Save JSON
-    fs.writeFileSync(outputPath, JSON.stringify(result, null, 2));
-    console.log(`  Saved: ${outputPath}\n`);
+    // Optionally, we could also take category/yearRange from translation if present
+    // but we'll keep analysis values for those as they might be more accurate for categorization
+    
+    return merged;
   }
   
   async reviewResult(data) {
@@ -190,19 +235,32 @@ class WiringDiagramProcessor {
 
 // CLI entry point
 const args = require('minimist')(process.argv.slice(2));
-
 const inputDir = args.input || config.inputDir;
 const outputDir = args.output || config.outputDir;
 
-if (!config.openrouterApiKey && config.provider === 'openrouter') {
-  console.error('Error: OPENROUTER_API_KEY environment variable is required for OpenRouter provider.');
+// Validate API keys for analysis provider
+const analysisProvider = config.analysis.provider;
+if (analysisProvider === 'openrouter' && !config.analysis.openrouterApiKey) {
+  console.error('Error: OPENROUTER_API_KEY is required for OpenRouter analysis provider.');
   process.exit(1);
+}
+
+if (config.translation?.enabled) {
+  const transProvider = config.translation.provider;
+  if (transProvider === 'openrouter' && !config.translation.openrouterApiKey) {
+    console.error('Error: OPENROUTER_API_KEY is required for OpenRouter translation provider.');
+    process.exit(1);
+  }
 }
 
 const processor = new WiringDiagramProcessor();
 processor.processDirectory(inputDir, outputDir)
   .then(() => {
-    console.log('\nAll done!');
+    console.log('\n===== Summary =====');
+    console.log(`Processed: ${processor.stats.processed}`);
+    console.log(`Skipped: ${processor.stats.skipped}`);
+    console.log(`Errors: ${processor.stats.errors}`);
+    console.log('All done!');
     process.exit(0);
   })
   .catch(err => {
