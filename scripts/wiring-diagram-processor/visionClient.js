@@ -2,7 +2,7 @@ const fs = require('fs');
 
 // Polyfill fetch for Node.js < 18
 if (typeof globalThis.fetch === "undefined") {
-  globalThis.fetch = require("node-fetch");
+  globalThis.fetch = require("cross-fetch");
 }
 
 class VisionClient {
