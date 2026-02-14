@@ -9,6 +9,8 @@ class VisionClient {
   constructor(config, customPrompt = null) {
     this.config = config;
     this.customPrompt = customPrompt;
+    this.maxRetries = config.maxRetries || 3;
+    this.baseDelay = 1000; // 1 second base for exponential backoff
   }
   
   async analyzeImage(imagePath) {
@@ -39,8 +41,46 @@ class VisionClient {
     return map[ext] || 'image/png';
   }
   
+  async fetchWithRetry(requestFn, retryableStatuses = [408, 429, 500, 502, 503, 504]) {
+    let lastError;
+    
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          const delay = this.baseDelay * Math.pow(2, attempt - 1); // exponential backoff
+          console.log(`  Retrying in ${delay}ms (attempt ${attempt + 1}/${this.maxRetries + 1})...`);
+          await this.sleep(delay);
+        }
+        
+        return await requestFn();
+        
+      } catch (error) {
+        lastError = error;
+        
+        // Check if error is retryable
+        const status = error.status || error.code;
+        const isRetryable = retryableStatuses.includes(status) || 
+                           error.message.includes('Network connection lost') ||
+                           error.message.includes('fetch failed');
+        
+        if (!isRetryable || attempt >= this.maxRetries) {
+          console.error(`  Error after ${attempt + 1} attempts: ${error.message}`);
+          throw error;
+        }
+        
+        console.warn(`  Attempt ${attempt + 1} failed: ${error.message}. Retrying...`);
+      }
+    }
+    
+    throw lastError;
+  }
+  
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  
   async openaiAnalyze(base64, mime) {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const requestFn = () => fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -58,16 +98,24 @@ class VisionClient {
         temperature: 0.3,
         response_format: { type: 'json_object' }
       })
+    }).then(async response => {
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        const err = new Error(data.error?.message || 'OpenAI API error');
+        err.status = response.status;
+        throw err;
+      }
+      return data;
+    }).then(data => {
+      const content = JSON.parse(data.choices[0].message.content);
+      return content;
     });
     
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
-    const content = JSON.parse(data.choices[0].message.content);
-    return content;
+    return await this.fetchWithRetry(requestFn);
   }
   
   async anthropicAnalyze(base64, mime) {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const requestFn = () => fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -93,17 +141,24 @@ class VisionClient {
         }],
         temperature: 0.3
       })
+    }).then(async response => {
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        const err = new Error(data.error?.message || 'Anthropic API error');
+        err.status = response.status;
+        throw err;
+      }
+      return data;
+    }).then(data => {
+      const content = data.content[0].text;
+      return JSON.parse(content);
     });
     
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
-    const content = data.content[0].text;
-    const parsed = JSON.parse(content);
-    return parsed;
+    return await this.fetchWithRetry(requestFn);
   }
   
   async openrouterAnalyze(base64, mime) {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const requestFn = () => fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -123,12 +178,20 @@ class VisionClient {
         temperature: 0.3,
         response_format: { type: 'json_object' }
       })
+    }).then(async response => {
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        const err = new Error(data.error?.message || data.error?.code || 'OpenRouter API error');
+        err.status = response.status;
+        throw err;
+      }
+      return data;
+    }).then(data => {
+      const content = JSON.parse(data.choices[0].message.content);
+      return content;
     });
     
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data));
-    const content = JSON.parse(data.choices[0].message.content);
-    return content;
+    return await this.fetchWithRetry(requestFn);
   }
   
   getPrompt() {
