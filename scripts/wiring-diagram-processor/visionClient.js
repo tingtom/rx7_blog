@@ -1,5 +1,10 @@
 const fs = require('fs');
 
+// Polyfill fetch for Node.js < 18
+if (typeof globalThis.fetch === "undefined") {
+  globalThis.fetch = require("node-fetch");
+}
+
 class VisionClient {
   constructor(config, customPrompt = null) {
     this.config = config;
