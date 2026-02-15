@@ -1,18 +1,30 @@
 interface WiringSearchProps {
   initialQuery?: string;
   initialCategory?: string;
+  initialWireColor?: string;
+  initialComponent?: string;
+  initialConnector?: string;
   categories: string[];
+  wireColors: string[];
+  components: string[];
+  connectors: string[];
 }
 
 export default function WiringSearch({
   initialQuery = '',
   initialCategory = 'all',
-  categories
+  initialWireColor = '',
+  initialComponent = '',
+  initialConnector = '',
+  categories,
+  wireColors,
+  components,
+  connectors,
 }: WiringSearchProps) {
   return (
-    <div className="flex flex-col md:flex-row gap-4 mb-8">
-      {/* Search form */}
-      <form action="/wiring" method="get" className="flex-1 flex gap-2">
+    <form action="/wiring" method="get" className="flex flex-col gap-4 mb-8">
+      <div className="flex flex-col md:flex-row gap-2">
+        {/* Search input */}
         <input
           type="text"
           name="q"
@@ -20,19 +32,8 @@ export default function WiringSearch({
           placeholder="Search wire colors, components, pins, connectors..."
           className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
         />
-        {initialQuery && (
-          <button
-            type="submit"
-            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
-          >
-            Clear
-          </button>
-        )}
-      </form>
-      
-      {/* Category filter */}
-      <form action="/wiring" method="get" className="flex gap-2">
-        {initialQuery && <input type="hidden" name="q" value={initialQuery} />}
+
+        {/* Category filter */}
         <select
           name="category"
           defaultValue={initialCategory}
@@ -44,17 +45,46 @@ export default function WiringSearch({
             <option key={cat} value={cat}>{cat}</option>
           ))}
         </select>
-        {initialCategory !== 'all' && (
-          <button
-            type="submit"
-            name="category"
-            value="all"
-            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
-          >
-            Clear
-          </button>
-        )}
-      </form>
-    </div>
+
+        {/* Wire Color filter */}
+        <select
+          name="wireColor"
+          defaultValue={initialWireColor}
+          onChange="this.form.submit()"
+          className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+        >
+          <option value="">All Wire Colors</option>
+          {wireColors.map(wc => (
+            <option key={wc} value={wc}>{wc}</option>
+          ))}
+        </select>
+
+        {/* Component filter */}
+        <select
+          name="component"
+          defaultValue={initialComponent}
+          onChange="this.form.submit()"
+          className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+        >
+          <option value="">All Components</option>
+          {components.map(comp => (
+            <option key={comp} value={comp}>{comp}</option>
+          ))}
+        </select>
+
+        {/* Connector filter */}
+        <select
+          name="connector"
+          defaultValue={initialConnector}
+          onChange="this.form.submit()"
+          className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+        >
+          <option value="">All Connectors</option>
+          {connectors.map(conn => (
+            <option key={conn} value={conn}>{conn}</option>
+          ))}
+        </select>
+      </div>
+    </form>
   );
 }

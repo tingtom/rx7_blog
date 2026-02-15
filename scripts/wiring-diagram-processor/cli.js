@@ -63,7 +63,13 @@ class WiringDiagramProcessor {
       return;
     }
     
-    console.log(`Found ${files.length} images to process.\n`);
+    console.log(`Found ${files.length} images to process.`);
+    if (this.translationClient) {
+      console.log('Mode: Translation enabled (two-pass analysis + translation)');
+    } else {
+      console.log('Mode: Analysis only (no translation)');
+    }
+    console.log('');
     
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -74,7 +80,7 @@ class WiringDiagramProcessor {
       
       // Skip if already processed
       if (fs.existsSync(outputPath)) {
-        console.log(`  Already exists, skipping.`);
+        console.log('  Already exists, skipping.');
         this.stats.skipped++;
         // Still read existing file to add to JSONL
         try {
@@ -96,7 +102,7 @@ class WiringDiagramProcessor {
         }
         this.stats.processed++;
       } catch (error) {
-        console.error(`  Error: ${error.message}`);
+        console.error(`  ✗ Error: ${error.message}`);
         this.stats.errors++;
       }
     }
@@ -110,24 +116,56 @@ class WiringDiagramProcessor {
   
   async processImage(imagePath, outputPath) {
     try {
-      console.log('  Analyzing...');
+      console.log('  Step 1/2: Analyzing image...');
       const analysisData = await this.analysisClient.analyzeImage(imagePath);
+      
+      // Log analysis results
+      console.log('  Analysis complete:');
+      console.log(`    Title: "${analysisData.title}"`);
+      console.log(`    Category: ${analysisData.category || 'not specified'}`);
+      console.log(`    Wire Colors: ${analysisData.wireColors?.length || 0} (${analysisData.wireColors?.join(', ') || 'none'})`);
+      console.log(`    Components: ${analysisData.components?.length || 0} (${analysisData.components?.join(', ') || 'none'})`);
+      console.log(`    Connectors: ${analysisData.connectors?.length || 0} (${analysisData.connectors?.join(', ') || 'none'})`);
+      console.log(`    ECU Pins: ${analysisData.ecuPins?.length || 0} (${analysisData.ecuPins?.join(', ') || 'none'})`);
+      console.log(`    Year Range: ${analysisData.yearRange || 'not specified'}`);
+      console.log(`    Description: ${analysisData.description ? `"${analysisData.description.substring(0, 100)}${analysisData.description.length > 100 ? '...' : ''}"` : 'none'}`);
+      console.log(`    Confidence: ${analysisData.confidence !== undefined ? `${(analysisData.confidence * 100).toFixed(1)}%` : 'not provided'}`);
       
       let data = analysisData;
       if (this.translationClient) {
-        console.log('  Translating...');
+        console.log('  Step 2/2: Translating with second model...');
         const translatedData = await this.translationClient.analyzeImage(imagePath);
         // Merge: override text fields from analysis with translated ones
         data = this.mergeResults(analysisData, translatedData);
+        
+        console.log('  Translation complete:');
+        console.log(`    Translated Title: "${data.title}"`);
+        console.log(`    Translated Components: ${data.components?.length || 0} (${data.components?.join(', ') || 'none'})`);
+        console.log(`    Translated Connectors: ${data.connectors?.length || 0} (${data.connectors?.join(', ') || 'none'})`);
+        console.log(`    Translated ECU Pins: ${data.ecuPins?.length || 0} (${data.ecuPins?.join(', ') || 'none'})`);
+        if (data.description) {
+          console.log(`    Translated Description: "${data.description.substring(0, 100)}${data.description.length > 100 ? '...' : ''}"`);
+        }
       }
 
       // Deduplicate arrays if configured
       if (config.deduplicateArrays) {
-        ['wireColors', 'components', 'connectors', 'ecuPins'].forEach((field) => {
+        const fields = ['wireColors', 'components', 'connectors', 'ecuPins'];
+        let dedupOccurred = false;
+        fields.forEach((field) => {
           if (Array.isArray(data[field])) {
+            const before = data[field].length;
             data[field] = [...new Set(data[field].map(String).map((s) => s.trim()))].filter(Boolean);
+            const after = data[field].length;
+            if (before !== after) {
+              dedupOccurred = true;
+              console.log(`    Deduplicated ${field}: ${before} -> ${after}`);
+            }
           }
         });
+        if (!dedupOccurred) {
+          console.log('    No duplicates found in arrays.');
+        }
       }
       
       // Add metadata
@@ -142,21 +180,30 @@ class WiringDiagramProcessor {
       const needsReview = (result.confidence || 0) < config.confidenceThreshold;
       
       if (needsReview) {
+        console.log(`  ⚠ Low confidence (${(result.confidence * 100).toFixed(1)}%) - review required`);
         const edited = await this.reviewResult(result);
         if (edited === null) {
-          console.log('  Skipped by user.');
+          console.log('  ✗ Skipped by user.\n');
           return null;
         }
         Object.assign(result, edited);
+        console.log('  After editing:');
+        console.log(`    Title: "${result.title}"`);
+        console.log(`    Wire Colors: ${result.wireColors?.length || 0}`);
+        console.log(`    Components: ${result.components?.length || 0}`);
+        console.log(`    Connectors: ${result.connectors?.length || 0}`);
+        console.log(`    ECU Pins: ${result.ecuPins?.length || 0}`);
       }
       
-      // Save JSON (minified - single line)
-      fs.writeFileSync(outputPath, JSON.stringify(result));
-      console.log(`  ✓ Saved: ${outputPath}\n`);
+      // Save JSON (minified)
+      const jsonBytes = JSON.stringify(result);
+      fs.writeFileSync(outputPath, jsonBytes);
+      console.log(`  ✓ Saved: ${outputPath} (${jsonBytes.length} bytes, minified)\n`);
       
       return result;
       
     } catch (error) {
+      console.error(`  ✗ Failed: ${error.message}`);
       throw error;
     }
   }
@@ -177,17 +224,17 @@ class WiringDiagramProcessor {
   }
   
   async reviewResult(data) {
-    console.log('\n----- Review -----');
+    console.log('\n----- Review Required -----');
     console.log(`Image: ${data.imageFilename}`);
     console.log(`Confidence: ${(data.confidence * 100).toFixed(1)}%`);
     console.log(`Title: ${data.title}`);
-    console.log(`Category: ${data.category}`);
+    console.log(`Category: ${data.category || 'none'}`);
     console.log(`Wire Colors: ${data.wireColors?.join(', ') || 'none'}`);
     console.log(`Components: ${data.components?.join(', ') || 'none'}`);
     console.log(`Connectors: ${data.connectors?.join(', ') || 'none'}`);
     console.log(`ECU Pins: ${data.ecuPins?.join(', ') || 'none'}`);
     console.log(`Year Range: ${data.yearRange || 'none'}`);
-    console.log('------------------\n');
+    console.log('---------------------------\n');
     
     const { action } = await inquirer.prompt([{
       type: 'list',

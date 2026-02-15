@@ -10,6 +10,7 @@ interface DiagramWithImage {
   category?: string;
   yearRange?: string;
   wireColors?: string[];
+  components?: string[];
   connectors?: string[];
   ecuPins?: string[];
   imageUrl?: string;
@@ -18,19 +19,37 @@ interface DiagramWithImage {
 export default async function WiringPage({
   searchParams,
 }: {
-  searchParams: { q?: string; category?: string };
+  searchParams: { 
+    q?: string; 
+    category?: string;
+    wireColor?: string;
+    component?: string;
+    connector?: string;
+  };
 }) {
   const query = searchParams.q || '';
   const categoryFilter = searchParams.category || 'all';
-  
-  // Fetch all wiring diagrams with categories (we'll deduplicate in TypeScript)
-  const allWiringDiagrams = await sanityFetch<Array<{ category?: string }>>(
-    `*[_type == "wiringDiagram" && defined(category)] { category }`
-  );
-  const allCategories = [...new Set(allWiringDiagrams.map(d => d.category).filter(Boolean))].sort();
-  
-  // Build GROQ query with dynamic search across multiple fields
+  const wireColorFilter = searchParams.wireColor || '';
+  const componentFilter = searchParams.component || '';
+  const connectorFilter = searchParams.connector || '';
+
+  // Fetch distinct values for filters (deduplicated)
+  const [allCategories, allWireColors, allComponents, allConnectors] = await Promise.allSettled([
+    sanityFetch<string[]>(`distinct(*[_type == "wiringDiagram" && defined(category)].category)`),
+    sanityFetch<string[]>(`distinct(array::flatten(*[_type == "wiringDiagram" && defined(wireColors)].wireColors))`),
+    sanityFetch<string[]>(`distinct(array::flatten(*[_type == "wiringDiagram" && defined(components)].components))`),
+    sanityFetch<string[]>(`distinct(array::flatten(*[_type == "wiringDiagram" && defined(connectors)].connectors))`),
+  ]);
+
+  const categories = allCategories.status === 'fulfilled' ? allCategories.value.sort() : [];
+  const wireColors = allWireColors.status === 'fulfilled' ? allWireColors.value.sort() : [];
+  const components = allComponents.status === 'fulfilled' ? allComponents.value.sort() : [];
+  const connectors = allConnectors.status === 'fulfilled' ? allConnectors.value.sort() : [];
+
+  // Build GROQ query with dynamic filters across multiple fields
   const conditions: string[] = [];
+
+  // General text search across multiple fields
   if (query) {
     conditions.push(`(
       title match $query ||
@@ -41,10 +60,21 @@ export default async function WiringPage({
       [].concat(ecuPins)[*] match $query
     )`);
   }
+
+  // Exact filters (use 'in' operator for arrays)
   if (categoryFilter !== 'all') {
     conditions.push(`category == $category`);
   }
-  
+  if (wireColorFilter) {
+    conditions.push(`$wireColor in wireColors`);
+  }
+  if (componentFilter) {
+    conditions.push(`$component in components`);
+  }
+  if (connectorFilter) {
+    conditions.push(`$connector in connectors`);
+  }
+
   // Fetch diagrams with their image URLs
   const diagrams: DiagramWithImage[] = await sanityFetch(`
     *[_type == "wiringDiagram" ${conditions.length ? '&& ' + conditions.join(' && ') : ''}] {
@@ -62,7 +92,10 @@ export default async function WiringPage({
     } | order(publishedAt desc, title asc)
   `, { 
     query: `*${query}*`, 
-    category: categoryFilter 
+    category: categoryFilter,
+    wireColor: wireColorFilter,
+    component: componentFilter,
+    connector: connectorFilter,
   });
 
   return (
@@ -70,19 +103,25 @@ export default async function WiringPage({
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-bold">Wiring Diagrams</h1>
       </div>
-      
-      {/* Search & Filter */}
+
+      {/* Search & Filters */}
       <WiringSearch
         initialQuery={query}
         initialCategory={categoryFilter}
-        categories={allCategories}
+        initialWireColor={wireColorFilter}
+        initialComponent={componentFilter}
+        initialConnector={connectorFilter}
+        categories={categories}
+        wireColors={wireColors}
+        components={components}
+        connectors={connectors}
       />
-      
+
       {/* Results */}
       {diagrams.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-gray-600 text-lg">No wiring diagrams found.</p>
-          {(query || categoryFilter !== 'all') && (
+          {(query || categoryFilter !== 'all' || wireColorFilter || componentFilter || connectorFilter) && (
             <p className="text-gray-500 mt-2">
               Try adjusting your search or filter criteria.
             </p>
@@ -94,6 +133,9 @@ export default async function WiringPage({
             Showing {diagrams.length} diagram{diagrams.length !== 1 ? 's' : ''}
             {query && ` matching "${query}"`}
             {categoryFilter !== 'all' && ` in category "${categoryFilter}"`}
+            {wireColorFilter && ` with wire color "${wireColorFilter}"`}
+            {componentFilter && ` with component "${componentFilter}"`}
+            {connectorFilter && ` with connector "${connectorFilter}"`}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {diagrams.map((diagram) => (
@@ -113,7 +155,7 @@ export async function generateStaticParams() {
       slug
     }
   `);
-  
+
   return diagrams.map((diagram) => ({
     slug: diagram.slug.current,
   }));

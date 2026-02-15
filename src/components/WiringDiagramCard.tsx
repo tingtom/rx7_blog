@@ -11,6 +11,23 @@ interface WiringDiagram {
   imageUrl?: string;
 }
 
+// Helper to get Tailwind classes for wire color backgrounds with good contrast
+function getWireColorClasses(color: string): string {
+  const c = color.toLowerCase();
+  if (c.includes('red')) return 'bg-red-600 text-white';
+  if (c.includes('black')) return 'bg-gray-900 text-white';
+  if (c.includes('yellow')) return 'bg-yellow-400 text-black';
+  if (c.includes('green')) return 'bg-green-600 text-white';
+  if (c.includes('white')) return 'bg-gray-200 text-gray-900';
+  if (c.includes('blue')) return 'bg-blue-600 text-white';
+  if (c.includes('brown')) return 'bg-amber-700 text-white';
+  if (c.includes('orange')) return 'bg-orange-500 text-white';
+  if (c.includes('purple')) return 'bg-purple-600 text-white';
+  if (c.includes('pink')) return 'bg-pink-500 text-white';
+  // Default for unknown or multi-colors
+  return 'bg-gray-200 text-gray-800';
+}
+
 export default function WiringDiagramCard({ diagram }: { diagram: WiringDiagram }) {
   return (
     <a
@@ -49,7 +66,7 @@ export default function WiringDiagramCard({ diagram }: { diagram: WiringDiagram 
             {diagram.wireColors.slice(0, 4).map((color, i) => (
               <span
                 key={i}
-                className="text-xs bg-gray-200 px-2 py-0.5 rounded"
+                className={`text-xs px-2 py-0.5 rounded ${getWireColorClasses(color)}`}
               >
                 {color}
               </span>
