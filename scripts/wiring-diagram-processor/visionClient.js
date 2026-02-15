@@ -226,20 +226,13 @@ class VisionClient {
        const message = data.choices[0].message;
        
        // Check if image generation was requested and image is present
-       if (this.config.generateImage && message.images && message.images.length > 0) {
-         const imageData = message.images[0].image_url.url; // base64 data URL
-         const result = { _generatedImage: imageData };
-         
-         // Also try to extract JSON from text content if present
-         if (message.content) {
-           try {
-             const parsed = JSON.parse(message.content);
-             Object.assign(result, parsed);
-           } catch (e) {
-             // ignore parse errors - image is the primary output
-           }
+       if (this.config.generateImage) {
+         if (message.images && message.images.length > 0) {
+           const imageData = message.images[0].image_url.url; // base64 data URL
+           return { _generatedImage: imageData };
+         } else {
+           throw new Error('Image generation requested but no image returned. Response contains only text.');
          }
-         return result;
        } else {
          // Text-only mode - parse content as JSON
          try {

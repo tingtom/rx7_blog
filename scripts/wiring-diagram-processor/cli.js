@@ -8,37 +8,17 @@ const VisionClient = require('./visionClient');
 const config = require('./config');
 
 // Translation prompt specifically for translating Japanese to English
-const TRANSLATION_PROMPT = `You are a specialized translator for Japanese automotive wiring diagrams. Your task is to:
-1. Generate a new image with ALL Japanese text translated to English, keeping everything else identical
-2. ALSO provide the same JSON structure as the analysis model with translated text fields
+const TRANSLATION_PROMPT = `You are an image translation specialist for Japanese automotive wiring diagrams.
 
-IMPORTANT: Both the generated image AND the JSON response are required.
+TASK: Generate a new image that is identical to the input but with ALL Japanese text translated to English.
 
-{
-  "title": "English title (translate if Japanese)",
-  "wireColors": ["Red", "Black", ...], // keep colors as-is, they are usually universal
-  "components": ["ECU", "fuel pump", ...], // TRANSLATE all component names to English
-  "connectors": ["FPC", "EPC", ...], // TRANSLATE connector names (e.g., 接続端子 -> Connector Terminal)
-  "ecuPins": ["ECU pin 1", ...], // TRANSLATE any Japanese text, keep pin numbers
-  "category": "Engine/ECU", // Already in English, keep or refine
-  "yearRange": "1993-1995", // Already fine
-  "description": "English description (fully translated)",
-  "notes": "English notes (translate all Japanese text, keep symbols/numbers)",
-  "confidence": 0.95
-}
-
-GUIDELINES FOR IMAGE GENERATION:
-- Generate a new image that is identical to the input but with ALL Japanese text replaced by English translations
-- Keep wire colors, line styles, symbols, layouts exactly the same
-- Only change the text labels (component names, connector names, pin labels, etc.)
-- Ensure the translation is accurate and uses standard automotive terminology
-
-GUIDELINES FOR JSON:
-- Focus on translating ALL Japanese text to natural English
-- Preserve numbers, wire color names, pin numbers, symbols exactly
-- For components/connectors: convert Japanese terms to standard RX-7 English terminology
-- If text is already English, keep it unchanged
-- Ensure translations are concise and accurate`;
+CRITICAL INSTRUCTIONS:
+- Output ONLY the translated image
+- Do NOT include any text response or JSON
+- Translate every Japanese character to English
+- Keep wire colors, line styles, symbols, layouts, and all graphics exactly the same
+- Only change text labels (component names, connector names, pin labels, etc.)
+- Use standard automotive English terminology`;
 
 class WiringDiagramProcessor {
   constructor() {
@@ -157,17 +137,21 @@ class WiringDiagramProcessor {
              console.log('  ✓ Translated image generated');
            }
            
-           // Merge: override text fields from analysis with translated ones
-           data = this.mergeResults(analysisData, translatedData);
-           
-           console.log('  Translation complete:');
-           console.log(`    Translated Title: "${data.title}"`);
-           console.log(`    Translated Components: ${data.components?.length || 0} (${data.components?.join(', ') || 'none'})`);
-           console.log(`    Translated Connectors: ${data.connectors?.length || 0} (${data.connectors?.join(', ') || 'none'})`);
-           console.log(`    Translated ECU Pins: ${data.ecuPins?.length || 0} (${data.ecuPins?.join(', ') || 'none'})`);
-           if (data.description) {
-             const descPreview = data.description.substring(0, 100);
-             console.log(`    Translated Description: "${descPreview}${data.description.length > 100 ? '...' : ''}"`);
+           // Merge text fields if any (image-only translation won't have these)
+           if (Object.keys(translatedData).length > 0) {
+             data = this.mergeResults(analysisData, translatedData);
+             
+             console.log('  Translation complete:');
+             console.log(`    Translated Title: "${data.title}"`);
+             console.log(`    Translated Components: ${data.components?.length || 0} (${data.components?.join(', ') || 'none'})`);
+             console.log(`    Translated Connectors: ${data.connectors?.length || 0} (${data.connectors?.join(', ') || 'none'})`);
+             console.log(`    Translated ECU Pins: ${data.ecuPins?.length || 0} (${data.ecuPins?.join(', ') || 'none'})`);
+             if (data.description) {
+               const descPreview = data.description.substring(0, 100);
+               console.log(`    Translated Description: "${descPreview}${data.description.length > 100 ? '...' : ''}"`);
+             }
+           } else {
+             console.log('  Translation image-only (no text fields merged)');
            }
          } catch (translationErr) {
            // Translation failed - continue with analysis data only
