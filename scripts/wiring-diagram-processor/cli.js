@@ -37,7 +37,7 @@ class WiringDiagramProcessor {
     this.analysisClient = new VisionClient(config.analysis);
     if (config.translation?.enabled) {
       this.translationClient = new VisionClient(config.translation, TRANSLATION_PROMPT);
-      console.log('✓ Translation enabled using model:', config.translation.model);
+      console.log(`✓ Translation enabled: ${config.translation.provider}/${config.translation.model}`);
     } else {
       this.translationClient = null;
     }
@@ -64,10 +64,11 @@ class WiringDiagramProcessor {
     }
     
     console.log(`Found ${files.length} images to process.`);
+    console.log(`Analysis model: ${config.analysis.provider}/${config.analysis.model}`);
     if (this.translationClient) {
-      console.log('Mode: Translation enabled (two-pass analysis + translation)');
+      console.log(`Translation model: ${config.translation.provider}/${config.translation.model}`);
     } else {
-      console.log('Mode: Analysis only (no translation)');
+      console.log('Translation: disabled (single-pass)');
     }
     console.log('');
     
@@ -102,7 +103,7 @@ class WiringDiagramProcessor {
         }
         this.stats.processed++;
       } catch (error) {
-        console.error(`  ✗ Error: ${error.message}`);
+        // Error already logged by processImage
         this.stats.errors++;
       }
     }
@@ -128,23 +129,34 @@ class WiringDiagramProcessor {
       console.log(`    Connectors: ${analysisData.connectors?.length || 0} (${analysisData.connectors?.join(', ') || 'none'})`);
       console.log(`    ECU Pins: ${analysisData.ecuPins?.length || 0} (${analysisData.ecuPins?.join(', ') || 'none'})`);
       console.log(`    Year Range: ${analysisData.yearRange || 'not specified'}`);
-      console.log(`    Description: ${analysisData.description ? `"${analysisData.description.substring(0, 100)}${analysisData.description.length > 100 ? '...' : ''}"` : 'none'}`);
+      if (analysisData.description) {
+        const descPreview = analysisData.description.substring(0, 100);
+        console.log(`    Description: "${descPreview}${analysisData.description.length > 100 ? '...' : ''}"`);
+      }
       console.log(`    Confidence: ${analysisData.confidence !== undefined ? `${(analysisData.confidence * 100).toFixed(1)}%` : 'not provided'}`);
       
       let data = analysisData;
       if (this.translationClient) {
         console.log('  Step 2/2: Translating with second model...');
-        const translatedData = await this.translationClient.analyzeImage(imagePath);
-        // Merge: override text fields from analysis with translated ones
-        data = this.mergeResults(analysisData, translatedData);
-        
-        console.log('  Translation complete:');
-        console.log(`    Translated Title: "${data.title}"`);
-        console.log(`    Translated Components: ${data.components?.length || 0} (${data.components?.join(', ') || 'none'})`);
-        console.log(`    Translated Connectors: ${data.connectors?.length || 0} (${data.connectors?.join(', ') || 'none'})`);
-        console.log(`    Translated ECU Pins: ${data.ecuPins?.length || 0} (${data.ecuPins?.join(', ') || 'none'})`);
-        if (data.description) {
-          console.log(`    Translated Description: "${data.description.substring(0, 100)}${data.description.length > 100 ? '...' : ''}"`);
+        try {
+          const translatedData = await this.translationClient.analyzeImage(imagePath);
+          // Merge: override text fields from analysis with translated ones
+          data = this.mergeResults(analysisData, translatedData);
+          
+          console.log('  Translation complete:');
+          console.log(`    Translated Title: "${data.title}"`);
+          console.log(`    Translated Components: ${data.components?.length || 0} (${data.components?.join(', ') || 'none'})`);
+          console.log(`    Translated Connectors: ${data.connectors?.length || 0} (${data.connectors?.join(', ') || 'none'})`);
+          console.log(`    Translated ECU Pins: ${data.ecuPins?.length || 0} (${data.ecuPins?.join(', ') || 'none'})`);
+          if (data.description) {
+            const descPreview = data.description.substring(0, 100);
+            console.log(`    Translated Description: "${descPreview}${data.description.length > 100 ? '...' : ''}"`);
+          }
+        } catch (translationErr) {
+          // Translation failed - continue with analysis data only
+          console.warn(`  ⚠ Translation failed: ${translationErr.message}`);
+          console.warn('  Continuing with analysis results only (no translation).');
+          data = analysisData;
         }
       }
 
@@ -189,7 +201,7 @@ class WiringDiagramProcessor {
         Object.assign(result, edited);
         console.log('  After editing:');
         console.log(`    Title: "${result.title}"`);
-        console.log(`    Wire Colors: ${result.wireColors?.length || 0}`);
+        console.log(`    Wire Colors: ${result.wireColors?.length || 0} (${result.wireColors?.join(', ') || 'none'})`);
         console.log(`    Components: ${result.components?.length || 0}`);
         console.log(`    Connectors: ${result.connectors?.length || 0}`);
         console.log(`    ECU Pins: ${result.ecuPins?.length || 0}`);

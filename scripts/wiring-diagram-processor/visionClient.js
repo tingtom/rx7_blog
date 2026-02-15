@@ -48,7 +48,7 @@ class VisionClient {
       try {
         if (attempt > 0) {
           const delay = this.baseDelay * Math.pow(2, attempt - 1); // exponential backoff
-          console.log(`  Retrying in ${delay}ms (attempt ${attempt + 1}/${this.maxRetries + 1})...`);
+          console.log(`    Retrying in ${delay}ms (attempt ${attempt + 1}/${this.maxRetries + 1})...`);
           await this.sleep(delay);
         }
         
@@ -64,7 +64,17 @@ class VisionClient {
                            error.message.includes('fetch failed');
         
         if (!isRetryable || attempt >= this.maxRetries) {
-          console.error(`  Error after ${attempt + 1} attempts: ${error.message}`);
+          // Include response body if available for more context
+          if (error.body) {
+            try {
+              const body = typeof error.body === 'string' ? JSON.parse(error.body) : error.body;
+              const snippet = JSON.stringify(body).substring(0, 300);
+              error.message += ` (Response: ${snippet}${JSON.stringify(body).length > 300 ? '...' : ''})`;
+            } catch (e) {
+              // ignore parse errors
+            }
+          }
+          console.error(`  Error after ${attempt + 1} attempts: ${error.message} (status: ${status || 'none'})`);
           throw error;
         }
         
@@ -101,14 +111,19 @@ class VisionClient {
     }).then(async response => {
       const data = await response.json();
       if (!response.ok || data.error) {
-        const err = new Error(data.error?.message || 'OpenAI API error');
+        const err = new Error(data.error?.message || data.error?.code || 'OpenAI API error');
         err.status = response.status;
+        err.body = data;
         throw err;
       }
       return data;
     }).then(data => {
-      const content = JSON.parse(data.choices[0].message.content);
-      return content;
+      try {
+        const content = JSON.parse(data.choices[0].message.content);
+        return content;
+      } catch (parseErr) {
+        throw new Error(`Failed to parse AI response as JSON: ${parseErr.message}. Response: ${data.choices[0].message.content.substring(0, 200)}`);
+      }
     });
     
     return await this.fetchWithRetry(requestFn);
@@ -144,14 +159,19 @@ class VisionClient {
     }).then(async response => {
       const data = await response.json();
       if (!response.ok || data.error) {
-        const err = new Error(data.error?.message || 'Anthropic API error');
+        const err = new Error(data.error?.message || data.error?.type || 'Anthropic API error');
         err.status = response.status;
+        err.body = data;
         throw err;
       }
       return data;
     }).then(data => {
-      const content = data.content[0].text;
-      return JSON.parse(content);
+      try {
+        const content = data.content[0].text;
+        return JSON.parse(content);
+      } catch (parseErr) {
+        throw new Error(`Failed to parse AI response as JSON: ${parseErr.message}. Response: ${data.content[0].text.substring(0, 200)}`);
+      }
     });
     
     return await this.fetchWithRetry(requestFn);
@@ -183,12 +203,17 @@ class VisionClient {
       if (!response.ok || data.error) {
         const err = new Error(data.error?.message || data.error?.code || 'OpenRouter API error');
         err.status = response.status;
+        err.body = data;
         throw err;
       }
       return data;
     }).then(data => {
-      const content = JSON.parse(data.choices[0].message.content);
-      return content;
+      try {
+        const content = JSON.parse(data.choices[0].message.content);
+        return content;
+      } catch (parseErr) {
+        throw new Error(`Failed to parse AI response as JSON: ${parseErr.message}. Response: ${data.choices[0].message.content.substring(0, 200)}`);
+      }
     });
     
     return await this.fetchWithRetry(requestFn);
