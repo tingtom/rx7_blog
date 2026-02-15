@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-require("dotenv").config();
+require("dotenv").config({ path: ['.env.local', '.env'] });
 const inquirer = require('inquirer');
 const path = require('path');
 const fs = require('fs');
