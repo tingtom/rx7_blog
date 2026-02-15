@@ -8,21 +8,27 @@ module.exports = {
     openrouterApiKey: process.env.OPENROUTER_API_KEY,
     openrouterReferer: process.env.OPENROUTER_REFERER || 'https://rx7.pro',
     openrouterAppName: process.env.OPENROUTER_APP_NAME || 'RX7 Wiring Processor',
+    // Set to false for models that don't support JSON mode (e.g., Gemini via OpenRouter)
+    useJsonMode: true,
   },
   
-  // Translation model: optional second vision pass to translate Japanese text
-  // If enabled, this model will process the same image and its text fields will override
-  // those from the analysis model.
-  translation: {
-    enabled: true,
-    provider: 'openrouter',
-    model: 'google/gemini-2.5-flash-image', // Capable vision model for translation
-    openaiApiKey: process.env.OPENAI_API_KEY,
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-    openrouterApiKey: process.env.OPENROUTER_API_KEY,
-    openrouterReferer: process.env.OPENROUTER_REFERER || 'https://rx7.pro',
-    openrouterAppName: process.env.OPENROUTER_APP_NAME || 'RX7 Wiring Processor',
-  },
+   // Translation model: optional second vision pass to translate Japanese text
+   // If enabled, this model will process the same image and its text fields will override
+   // those from the analysis model. For image-generation models (like Gemini 2.5 Flash Image),
+   // this will also generate a translated image.
+   translation: {
+     enabled: true,
+     provider: 'openrouter',
+     model: 'google/gemini-2.5-flash-image', // Image generation model for translation
+     openaiApiKey: process.env.OPENAI_API_KEY,
+     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+     openrouterApiKey: process.env.OPENROUTER_API_KEY,
+     openrouterReferer: process.env.OPENROUTER_REFERER || 'https://rx7.pro',
+     openrouterAppName: process.env.OPENROUTER_APP_NAME || 'RX7 Wiring Processor',
+     // For image generation models: useJsonMode must be false, and we set modalities
+     useJsonMode: false,
+     generateImage: true, // Enable image generation (for compatible models)
+   },
   
   // Processing settings
   confidenceThreshold: 0.8,

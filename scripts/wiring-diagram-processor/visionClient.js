@@ -90,24 +90,28 @@ class VisionClient {
   }
   
   async openaiAnalyze(base64, mime) {
+    const body = {
+      model: this.config.model,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: this.getPrompt() },
+          { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } }
+        ]
+      }],
+      temperature: 0.3
+    };
+    if (this.config.useJsonMode) {
+      body.response_format = { type: 'json_object' };
+    }
+    
     const requestFn = () => fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.config.openaiApiKey}`
       },
-      body: JSON.stringify({
-        model: this.config.model,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: this.getPrompt() },
-            { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } }
-          ]
-        }],
-        temperature: 0.3,
-        response_format: { type: 'json_object' }
-      })
+      body: JSON.stringify(body)
     }).then(async response => {
       const data = await response.json();
       if (!response.ok || data.error) {
@@ -177,47 +181,78 @@ class VisionClient {
     return await this.fetchWithRetry(requestFn);
   }
   
-  async openrouterAnalyze(base64, mime) {
-    const requestFn = () => fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.config.openrouterApiKey}`,
-        'HTTP-Referer': this.config.openrouterReferer,
-        'X-Title': this.config.openrouterAppName
-      },
-      body: JSON.stringify({
-        model: this.config.model,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: this.getPrompt() },
-            { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } }
-          ]
-        }],
-        temperature: 0.3,
-        response_format: { type: 'json_object' }
-      })
-    }).then(async response => {
-      const data = await response.json();
-      if (!response.ok || data.error) {
-        const err = new Error(data.error?.message || data.error?.code || 'OpenRouter API error');
-        err.status = response.status;
-        err.body = data;
-        throw err;
-      }
-      return data;
-    }).then(data => {
-      try {
-        const content = JSON.parse(data.choices[0].message.content);
-        return content;
-      } catch (parseErr) {
-        throw new Error(`Failed to parse AI response as JSON: ${parseErr.message}. Response: ${data.choices[0].message.content.substring(0, 200)}`);
-      }
-    });
-    
-    return await this.fetchWithRetry(requestFn);
-  }
+   async openrouterAnalyze(base64, mime) {
+     // Check if this is an image generation request (for translation with image output)
+     const generateImage = this.config.generateImage;
+     
+     const body = {
+       model: this.config.model,
+       messages: [{
+         role: 'user',
+         content: [
+           { type: 'text', text: this.getPrompt() },
+           { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } }
+         ]
+       }],
+       temperature: 0.3
+     };
+     
+     // Add modalities for image generation models
+     if (generateImage) {
+       body.modalities = ['image', 'text'];
+     } else if (this.config.useJsonMode) {
+       body.response_format = { type: 'json_object' };
+     }
+     
+     const requestFn = () => fetch('https://openrouter.ai/api/v1/chat/completions', {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json',
+         'Authorization': `Bearer ${this.config.openrouterApiKey}`,
+         'HTTP-Referer': this.config.openrouterReferer,
+         'X-Title': this.config.openrouterAppName
+       },
+       body: JSON.stringify(body)
+     }).then(async response => {
+       const data = await response.json();
+       if (!response.ok || data.error) {
+         const err = new Error(data.error?.message || data.error?.code || 'OpenRouter API error');
+         err.status = response.status;
+         err.body = data;
+         throw err;
+       }
+       return data;
+     }).then(data => {
+       const message = data.choices[0].message;
+       
+       // Check if image generation was requested and image is present
+       if (this.config.generateImage && message.images && message.images.length > 0) {
+         const imageData = message.images[0].image_url.url; // base64 data URL
+         const result = { _generatedImage: imageData };
+         
+         // Also try to extract JSON from text content if present
+         if (message.content) {
+           try {
+             const parsed = JSON.parse(message.content);
+             Object.assign(result, parsed);
+           } catch (e) {
+             // ignore parse errors - image is the primary output
+           }
+         }
+         return result;
+       } else {
+         // Text-only mode - parse content as JSON
+         try {
+           const content = JSON.parse(message.content);
+           return content;
+         } catch (parseErr) {
+           throw new Error(`Failed to parse AI response as JSON: ${parseErr.message}. Response: ${message.content?.substring(0, 200) || 'empty'}`);
+         }
+       }
+     });
+     
+     return await this.fetchWithRetry(requestFn);
+   }
   
   getPrompt() {
     // If a custom prompt is provided, use it; otherwise use default analysis prompt

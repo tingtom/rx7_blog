@@ -8,9 +8,11 @@ const VisionClient = require('./visionClient');
 const config = require('./config');
 
 // Translation prompt specifically for translating Japanese to English
-const TRANSLATION_PROMPT = `You are a specialized translator for Japanese automotive wiring diagrams. Your task is to extract the SAME JSON structure as the analysis model, but with ALL Japanese text fully translated to English.
+const TRANSLATION_PROMPT = `You are a specialized translator for Japanese automotive wiring diagrams. Your task is to:
+1. Generate a new image with ALL Japanese text translated to English, keeping everything else identical
+2. ALSO provide the same JSON structure as the analysis model with translated text fields
 
-IMPORTANT: Return ONLY valid JSON with these exact keys. Do not include markdown or code block formatting.
+IMPORTANT: Both the generated image AND the JSON response are required.
 
 {
   "title": "English title (translate if Japanese)",
@@ -25,7 +27,13 @@ IMPORTANT: Return ONLY valid JSON with these exact keys. Do not include markdown
   "confidence": 0.95
 }
 
-Guidelines:
+GUIDELINES FOR IMAGE GENERATION:
+- Generate a new image that is identical to the input but with ALL Japanese text replaced by English translations
+- Keep wire colors, line styles, symbols, layouts exactly the same
+- Only change the text labels (component names, connector names, pin labels, etc.)
+- Ensure the translation is accurate and uses standard automotive terminology
+
+GUIDELINES FOR JSON:
 - Focus on translating ALL Japanese text to natural English
 - Preserve numbers, wire color names, pin numbers, symbols exactly
 - For components/connectors: convert Japanese terms to standard RX-7 English terminology
@@ -135,30 +143,39 @@ class WiringDiagramProcessor {
       }
       console.log(`    Confidence: ${analysisData.confidence !== undefined ? `${(analysisData.confidence * 100).toFixed(1)}%` : 'not provided'}`);
       
-      let data = analysisData;
-      if (this.translationClient) {
-        console.log('  Step 2/2: Translating with second model...');
-        try {
-          const translatedData = await this.translationClient.analyzeImage(imagePath);
-          // Merge: override text fields from analysis with translated ones
-          data = this.mergeResults(analysisData, translatedData);
-          
-          console.log('  Translation complete:');
-          console.log(`    Translated Title: "${data.title}"`);
-          console.log(`    Translated Components: ${data.components?.length || 0} (${data.components?.join(', ') || 'none'})`);
-          console.log(`    Translated Connectors: ${data.connectors?.length || 0} (${data.connectors?.join(', ') || 'none'})`);
-          console.log(`    Translated ECU Pins: ${data.ecuPins?.length || 0} (${data.ecuPins?.join(', ') || 'none'})`);
-          if (data.description) {
-            const descPreview = data.description.substring(0, 100);
-            console.log(`    Translated Description: "${descPreview}${data.description.length > 100 ? '...' : ''}"`);
-          }
-        } catch (translationErr) {
-          // Translation failed - continue with analysis data only
-          console.warn(`  ⚠ Translation failed: ${translationErr.message}`);
-          console.warn('  Continuing with analysis results only (no translation).');
-          data = analysisData;
-        }
-      }
+       let data = analysisData;
+       let generatedImageBase64 = null;
+       if (this.translationClient) {
+         console.log('  Step 2/2: Translating with second model...');
+         try {
+           const translatedData = await this.translationClient.analyzeImage(imagePath);
+           
+           // Check if a translated image was generated
+           if (translatedData._generatedImage) {
+             generatedImageBase64 = translatedData._generatedImage;
+             delete translatedData._generatedImage; // Don't include in JSON output
+             console.log('  ✓ Translated image generated');
+           }
+           
+           // Merge: override text fields from analysis with translated ones
+           data = this.mergeResults(analysisData, translatedData);
+           
+           console.log('  Translation complete:');
+           console.log(`    Translated Title: "${data.title}"`);
+           console.log(`    Translated Components: ${data.components?.length || 0} (${data.components?.join(', ') || 'none'})`);
+           console.log(`    Translated Connectors: ${data.connectors?.length || 0} (${data.connectors?.join(', ') || 'none'})`);
+           console.log(`    Translated ECU Pins: ${data.ecuPins?.length || 0} (${data.ecuPins?.join(', ') || 'none'})`);
+           if (data.description) {
+             const descPreview = data.description.substring(0, 100);
+             console.log(`    Translated Description: "${descPreview}${data.description.length > 100 ? '...' : ''}"`);
+           }
+         } catch (translationErr) {
+           // Translation failed - continue with analysis data only
+           console.warn(`  ⚠ Translation failed: ${translationErr.message}`);
+           console.warn('  Continuing with analysis results only (no translation).');
+           data = analysisData;
+         }
+       }
 
       // Deduplicate arrays if configured
       if (config.deduplicateArrays) {
@@ -180,39 +197,53 @@ class WiringDiagramProcessor {
         }
       }
       
-      // Add metadata
-      const result = {
-        ...data,
-        imageFilename: path.basename(imagePath),
-        processedAt: new Date().toISOString(),
-        _type: 'wiringDiagram',
-      };
-      
-      // Review if confidence is low
-      const needsReview = (result.confidence || 0) < config.confidenceThreshold;
-      
-      if (needsReview) {
-        console.log(`  ⚠ Low confidence (${(result.confidence * 100).toFixed(1)}%) - review required`);
-        const edited = await this.reviewResult(result);
-        if (edited === null) {
-          console.log('  ✗ Skipped by user.\n');
-          return null;
-        }
-        Object.assign(result, edited);
-        console.log('  After editing:');
-        console.log(`    Title: "${result.title}"`);
-        console.log(`    Wire Colors: ${result.wireColors?.length || 0} (${result.wireColors?.join(', ') || 'none'})`);
-        console.log(`    Components: ${result.components?.length || 0}`);
-        console.log(`    Connectors: ${result.connectors?.length || 0}`);
-        console.log(`    ECU Pins: ${result.ecuPins?.length || 0}`);
-      }
-      
-      // Save JSON (minified)
-      const jsonBytes = JSON.stringify(result);
-      fs.writeFileSync(outputPath, jsonBytes);
-      console.log(`  ✓ Saved: ${outputPath} (${jsonBytes.length} bytes, minified)\n`);
-      
-      return result;
+       // Add metadata
+       const result = {
+         ...data,
+         imageFilename: path.basename(imagePath),
+         processedAt: new Date().toISOString(),
+         _type: 'wiringDiagram',
+       };
+       
+       // Save generated image if present
+       if (generatedImageBase64) {
+         const imageExt = 'png'; // Gemini outputs PNG
+         const imageFilename = path.basename(outputPath, '.json') + '.' + imageExt;
+         const imageOutputPath = path.join(outputDir, imageFilename);
+         
+         // Remove data URL prefix (e.g., "data:image/png;base64,")
+         const base64Data = generatedImageBase64.replace(/^data:image\/\w+;base64,/, '');
+         fs.writeFileSync(imageOutputPath, base64Data, { encoding: 'base64' });
+         
+         result.translatedImageFilename = imageFilename;
+         console.log(`  ✓ Saved translated image: ${imageOutputPath}`);
+       }
+       
+       // Review if confidence is low
+       const needsReview = (result.confidence || 0) < config.confidenceThreshold;
+       
+       if (needsReview) {
+         console.log(`  ⚠ Low confidence (${(result.confidence * 100).toFixed(1)}%) - review required`);
+         const edited = await this.reviewResult(result);
+         if (edited === null) {
+           console.log('  ✗ Skipped by user.\n');
+           return null;
+         }
+         Object.assign(result, edited);
+         console.log('  After editing:');
+         console.log(`    Title: "${result.title}"`);
+         console.log(`    Wire Colors: ${result.wireColors?.length || 0} (${result.wireColors?.join(', ') || 'none'})`);
+         console.log(`    Components: ${result.components?.length || 0}`);
+         console.log(`    Connectors: ${result.connectors?.length || 0}`);
+         console.log(`    ECU Pins: ${result.ecuPins?.length || 0}`);
+       }
+       
+       // Save JSON (minified)
+       const jsonBytes = JSON.stringify(result);
+       fs.writeFileSync(outputPath, jsonBytes);
+       console.log(`  ✓ Saved: ${outputPath} (${jsonBytes.length} bytes, minified)\n`);
+       
+       return result;
       
     } catch (error) {
       console.error(`  ✗ Failed: ${error.message}`);
