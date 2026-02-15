@@ -15,6 +15,23 @@ interface WiringDiagram {
   imageUrl?: string;
 }
 
+// Helper to get Tailwind classes for wire color backgrounds with good contrast
+function getWireColorClasses(color: string): string {
+  const c = color.toLowerCase();
+  if (c.includes('red')) return 'bg-red-600 text-white';
+  if (c.includes('black')) return 'bg-gray-900 text-white';
+  if (c.includes('yellow')) return 'bg-yellow-400 text-black';
+  if (c.includes('green')) return 'bg-green-600 text-white';
+  if (c.includes('white')) return 'bg-gray-200 text-gray-900';
+  if (c.includes('blue')) return 'bg-blue-600 text-white';
+  if (c.includes('brown')) return 'bg-amber-700 text-white';
+  if (c.includes('orange')) return 'bg-orange-500 text-white';
+  if (c.includes('purple')) return 'bg-purple-600 text-white';
+  if (c.includes('pink')) return 'bg-pink-500 text-white';
+  // Default for unknown or multi-colors
+  return 'bg-gray-200 text-gray-800';
+}
+
 export default function WiringDiagramDetail({ diagram }: { diagram: WiringDiagram }) {
   return (
     <div className="container mx-auto px-4 py-8">
@@ -35,7 +52,7 @@ export default function WiringDiagramDetail({ diagram }: { diagram: WiringDiagra
             )}
           </div>
         </div>
-        
+
         {/* Metadata Panel */}
         <div className="space-y-6">
           {/* Title & badges */}
@@ -54,15 +71,12 @@ export default function WiringDiagramDetail({ diagram }: { diagram: WiringDiagra
               )}
             </div>
           </div>
-          
-          {/* Description */}
+
+          {/* Description - no heading, inline style */}
           {diagram.description && (
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="font-semibold mb-2 text-lg">Description</h3>
-              <p className="text-gray-700">{diagram.description}</p>
-            </div>
+            <p className="text-gray-600 mb-6">{diagram.description}</p>
           )}
-          
+
           {/* Wire Colors */}
           {diagram.wireColors && diagram.wireColors.length > 0 && (
             <div>
@@ -71,7 +85,7 @@ export default function WiringDiagramDetail({ diagram }: { diagram: WiringDiagra
                 {diagram.wireColors.map((color, i) => (
                   <span
                     key={i}
-                    className="px-3 py-1 bg-gray-200 rounded-full text-sm font-medium"
+                    className={`px-3 py-1 rounded-full text-sm font-medium ${getWireColorClasses(color)}`}
                   >
                     {color}
                   </span>
@@ -79,7 +93,7 @@ export default function WiringDiagramDetail({ diagram }: { diagram: WiringDiagra
               </div>
             </div>
           )}
-          
+
           {/* Components */}
           {diagram.components && diagram.components.length > 0 && (
             <div>
@@ -91,7 +105,7 @@ export default function WiringDiagramDetail({ diagram }: { diagram: WiringDiagra
               </ul>
             </div>
           )}
-          
+
           {/* Connectors */}
           {diagram.connectors && diagram.connectors.length > 0 && (
             <div>
@@ -108,7 +122,7 @@ export default function WiringDiagramDetail({ diagram }: { diagram: WiringDiagra
               </div>
             </div>
           )}
-          
+
           {/* ECU Pins */}
           {diagram.ecuPins && diagram.ecuPins.length > 0 && (
             <div>
@@ -125,7 +139,7 @@ export default function WiringDiagramDetail({ diagram }: { diagram: WiringDiagra
               </div>
             </div>
           )}
-          
+
           {/* Notes */}
           {diagram.notes && (
             <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
