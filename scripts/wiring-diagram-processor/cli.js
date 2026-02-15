@@ -48,6 +48,12 @@ class WiringDiagramProcessor {
     // Ensure output directory exists
     fs.mkdirSync(outputDir, { recursive: true });
     
+    // For JSONL output: collect all results
+    const allResults = [];
+    const jsonlPath = path.join(outputDir, 'all-diagrams.jsonl');
+    // Clear existing JSONL file
+    if (fs.existsSync(jsonlPath)) fs.unlinkSync(jsonlPath);
+    
     // Get all image files
     const files = fs.readdirSync(inputDir)
       .filter(f => /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(f));
@@ -70,17 +76,36 @@ class WiringDiagramProcessor {
       if (fs.existsSync(outputPath)) {
         console.log(`  Already exists, skipping.`);
         this.stats.skipped++;
+        // Still read existing file to add to JSONL
+        try {
+          const existing = JSON.parse(fs.readFileSync(outputPath, 'utf-8'));
+          allResults.push(existing);
+          fs.appendFileSync(jsonlPath, JSON.stringify(existing) + '\n');
+        } catch (e) {
+          // ignore
+        }
         continue;
       }
       
       try {
-        await this.processImage(inputPath, outputPath);
+        const result = await this.processImage(inputPath, outputPath);
+        if (result) {
+          allResults.push(result);
+          // Append to JSONL (minified, one line)
+          fs.appendFileSync(jsonlPath, JSON.stringify(result) + '\n');
+        }
         this.stats.processed++;
       } catch (error) {
         console.error(`  Error: ${error.message}`);
         this.stats.errors++;
       }
     }
+    
+    // Also write a combined JSON array file for convenience
+    const combinedPath = path.join(outputDir, 'all-diagrams.json');
+    fs.writeFileSync(combinedPath, JSON.stringify(allResults, null, 2));
+    console.log(`\n✓ Combined JSON written to: ${combinedPath}`);
+    console.log(`✓ JSONL written to: ${jsonlPath}`);
   }
   
   async processImage(imagePath, outputPath) {
@@ -120,14 +145,16 @@ class WiringDiagramProcessor {
         const edited = await this.reviewResult(result);
         if (edited === null) {
           console.log('  Skipped by user.');
-          return;
+          return null;
         }
         Object.assign(result, edited);
       }
       
-      // Save JSON
-      fs.writeFileSync(outputPath, JSON.stringify(result, null, 2));
+      // Save JSON (minified - single line)
+      fs.writeFileSync(outputPath, JSON.stringify(result));
       console.log(`  ✓ Saved: ${outputPath}\n`);
+      
+      return result;
       
     } catch (error) {
       throw error;
@@ -145,9 +172,7 @@ class WiringDiagramProcessor {
       }
     }
     
-    // Optionally, we could also take category/yearRange from translation if present
-    // but we'll keep analysis values for those as they might be more accurate for categorization
-    
+    // Keep analysis category/yearRange as they are more accurate for categorization
     return merged;
   }
   
