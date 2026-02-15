@@ -2,7 +2,7 @@ module.exports = {
   // Analysis model: extracts all fields from the image
   analysis: {
     provider: 'openrouter',
-    model: 'openai/gpt-4-turbo',
+    model: 'nvidia/nemotron-nano-12b-v2-vl:free',
     openaiApiKey: process.env.OPENAI_API_KEY,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     openrouterApiKey: process.env.OPENROUTER_API_KEY,
@@ -14,9 +14,9 @@ module.exports = {
   // If enabled, this model will process the same image and its text fields will override
   // those from the analysis model.
   translation: {
-    enabled: false,
+    enabled: true,
     provider: 'openrouter',
-    model: 'openai/gpt-4o', // Capable vision model for translation
+    model: 'google/gemini-2.5-flash-image', // Capable vision model for translation
     openaiApiKey: process.env.OPENAI_API_KEY,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     openrouterApiKey: process.env.OPENROUTER_API_KEY,
