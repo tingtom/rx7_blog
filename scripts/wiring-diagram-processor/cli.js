@@ -96,10 +96,6 @@ class WiringDiagramProcessor {
       }
     }
     
-    // Also write a combined JSON array file for convenience
-    const combinedPath = path.join(outputDir, 'all-diagrams.json');
-    fs.writeFileSync(combinedPath, JSON.stringify(allResults, null, 2));
-    console.log(`\n✓ Combined JSON written to: ${combinedPath}`);
     console.log(`✓ JSONL written to: ${jsonlPath}`);
   }
   

@@ -19,7 +19,7 @@ module.exports = {
    translation: {
      enabled: true,
      provider: 'openrouter',
-     model: 'google/gemini-2.5-flash-image-preview', // Image generation model (preview)
+     model: 'google/gemini-3-pro-image-preview', // Image generation model for translation
      openaiApiKey: process.env.OPENAI_API_KEY,
      anthropicApiKey: process.env.ANTHROPIC_API_KEY,
      openrouterApiKey: process.env.OPENROUTER_API_KEY,
