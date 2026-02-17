@@ -33,52 +33,52 @@ export default function WiringSearch({
           className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
         />
 
-        {/* Category filter */}
-        <select
-          name="category"
-          defaultValue={initialCategory}
-          onChange="this.form.submit()"
-          className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-        >
+         {/* Category filter */}
+         <select
+           name="category"
+           defaultValue={initialCategory}
+           onChange={(e) => e.target.form?.submit()}
+           className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+         >
           <option value="all">All Categories</option>
           {categories.map(cat => (
             <option key={cat} value={cat}>{cat}</option>
           ))}
         </select>
 
-        {/* Wire Color filter */}
-        <select
-          name="wireColor"
-          defaultValue={initialWireColor}
-          onChange="this.form.submit()"
-          className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-        >
+         {/* Wire Color filter */}
+         <select
+           name="wireColor"
+           defaultValue={initialWireColor}
+           onChange={(e) => e.target.form?.submit()}
+           className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+         >
           <option value="">All Wire Colors</option>
           {wireColors.map(wc => (
             <option key={wc} value={wc}>{wc}</option>
           ))}
         </select>
 
-        {/* Component filter */}
-        <select
-          name="component"
-          defaultValue={initialComponent}
-          onChange="this.form.submit()"
-          className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-        >
+         {/* Component filter */}
+         <select
+           name="component"
+           defaultValue={initialComponent}
+           onChange={(e) => e.target.form?.submit()}
+           className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+         >
           <option value="">All Components</option>
           {components.map(comp => (
             <option key={comp} value={comp}>{comp}</option>
           ))}
         </select>
 
-        {/* Connector filter */}
-        <select
-          name="connector"
-          defaultValue={initialConnector}
-          onChange="this.form.submit()"
-          className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-        >
+         {/* Connector filter */}
+         <select
+           name="connector"
+           defaultValue={initialConnector}
+           onChange={(e) => e.target.form?.submit()}
+           className="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+         >
           <option value="">All Connectors</option>
           {connectors.map(conn => (
             <option key={conn} value={conn}>{conn}</option>

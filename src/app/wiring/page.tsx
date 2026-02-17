@@ -35,16 +35,22 @@ export default async function WiringPage({
 
   // Fetch distinct values for filters (deduplicated)
   const [allCategories, allWireColors, allComponents, allConnectors] = await Promise.allSettled([
-    sanityFetch<string[]>(`distinct(*[_type == "wiringDiagram" && defined(category)].category)`),
-    sanityFetch<string[]>(`distinct(array::flatten(*[_type == "wiringDiagram" && defined(wireColors)].wireColors))`),
-    sanityFetch<string[]>(`distinct(array::flatten(*[_type == "wiringDiagram" && defined(components)].components))`),
-    sanityFetch<string[]>(`distinct(array::flatten(*[_type == "wiringDiagram" && defined(connectors)].connectors))`),
+    sanityFetch<string[]>(`distinct(*[_type == "wiringDiagram"].category)`),
+    sanityFetch<string[]>(`distinct(*[_type == "wiringDiagram"].wireColors[])`),
+    sanityFetch<string[]>(`distinct(*[_type == "wiringDiagram"].components[])`),
+    sanityFetch<string[]>(`distinct(*[_type == "wiringDiagram"].connectors[])`),
   ]);
 
   const categories = allCategories.status === 'fulfilled' ? allCategories.value.sort() : [];
   const wireColors = allWireColors.status === 'fulfilled' ? allWireColors.value.sort() : [];
   const components = allComponents.status === 'fulfilled' ? allComponents.value.sort() : [];
   const connectors = allConnectors.status === 'fulfilled' ? allConnectors.value.sort() : [];
+
+  // Log errors if any fetch failed
+  if (allCategories.status === 'rejected') console.error('Categories fetch failed:', allCategories.reason);
+  if (allWireColors.status === 'rejected') console.error('Wire colors fetch failed:', allWireColors.reason);
+  if (allComponents.status === 'rejected') console.error('Components fetch failed:', allComponents.reason);
+  if (allConnectors.status === 'rejected') console.error('Connectors fetch failed:', allConnectors.reason);
 
   // Build GROQ query with dynamic filters across multiple fields
   const conditions: string[] = [];
