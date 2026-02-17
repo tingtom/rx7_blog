@@ -33,24 +33,26 @@ export default async function WiringPage({
   const componentFilter = searchParams.component || '';
   const connectorFilter = searchParams.connector || '';
 
-  // Fetch distinct values for filters (deduplicated)
-  const [allCategories, allWireColors, allComponents, allConnectors] = await Promise.allSettled([
-    sanityFetch<string[]>(`distinct(*[_type == "wiringDiagram"].category)`),
-    sanityFetch<string[]>(`distinct(*[_type == "wiringDiagram"].wireColors[])`),
-    sanityFetch<string[]>(`distinct(*[_type == "wiringDiagram"].components[])`),
-    sanityFetch<string[]>(`distinct(*[_type == "wiringDiagram"].connectors[])`),
-  ]);
+  // Fetch all diagrams to extract filter options client-side (distinct not available)
+  const allDiagrams = await sanityFetch<Array<{
+    category?: string;
+    wireColors?: string[];
+    components?: string[];
+    connectors?: string[];
+  }>>(`
+    *[_type == "wiringDiagram"] {
+      category,
+      wireColors,
+      components,
+      connectors
+    }
+  `);
 
-  const categories = allCategories.status === 'fulfilled' ? allCategories.value.sort() : [];
-  const wireColors = allWireColors.status === 'fulfilled' ? allWireColors.value.sort() : [];
-  const components = allComponents.status === 'fulfilled' ? allComponents.value.sort() : [];
-  const connectors = allConnectors.status === 'fulfilled' ? allConnectors.value.sort() : [];
-
-  // Log errors if any fetch failed
-  if (allCategories.status === 'rejected') console.error('Categories fetch failed:', allCategories.reason);
-  if (allWireColors.status === 'rejected') console.error('Wire colors fetch failed:', allWireColors.reason);
-  if (allComponents.status === 'rejected') console.error('Components fetch failed:', allComponents.reason);
-  if (allConnectors.status === 'rejected') console.error('Connectors fetch failed:', allConnectors.reason);
+  // Extract unique values
+  const categories = [...new Set(allDiagrams.map(d => d.category).filter(Boolean) as string[])].sort();
+  const wireColors = [...new Set(allDiagrams.flatMap(d => d.wireColors || []))].sort();
+  const components = [...new Set(allDiagrams.flatMap(d => d.components || []))].sort();
+  const connectors = [...new Set(allDiagrams.flatMap(d => d.connectors || []))].sort();
 
   // Build GROQ query with dynamic filters across multiple fields
   const conditions: string[] = [];

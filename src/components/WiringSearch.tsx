@@ -1,3 +1,5 @@
+'use client';
+
 interface WiringSearchProps {
   initialQuery?: string;
   initialCategory?: string;
