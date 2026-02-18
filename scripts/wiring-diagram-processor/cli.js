@@ -20,6 +20,9 @@ CRITICAL INSTRUCTIONS:
 - Only change text labels (component names, connector names, pin labels, etc.)
 - Use standard automotive English terminology`;
 
+// Minimal prompt for extracting only the identifier from top-left corner
+const IDENTIFIER_PROMPT = `Analyze this Mazda RX-7 FD3S wiring diagram. Look for any alphanumeric code in the top-left corner (like Y, B-1a, 12A). Return ONLY valid JSON: {"identifier": "the code"} (empty string if none). Do not include any other text.`;
+
 class WiringDiagramProcessor {
   constructor() {
     this.analysisClient = new VisionClient(config.analysis);
@@ -35,22 +38,30 @@ class WiringDiagramProcessor {
   async groupImagesByIdentifier(files, inputDir) {
     const groups = new Map();
     console.log('Grouping images by identifier...');
+    // Use a separate client with minimal prompt to avoid large responses
+    const identifierClient = new VisionClient(config.analysis, IDENTIFIER_PROMPT);
     
     for (const file of files) {
       const inputPath = path.join(inputDir, file);
-      try {
-        const analysisData = await this.analysisClient.analyzeImage(inputPath);
-        const identifier = (analysisData.identifier || '').trim().toLowerCase();
-        console.log(`  ${file}: identifier="${identifier}"`);
-        if (!groups.has(identifier)) {
-          groups.set(identifier, []);
+      let identifier = '';
+      let attempts = 0;
+      const maxAttempts = 2;
+      while (attempts < maxAttempts && identifier === '') {
+        try {
+          const result = await identifierClient.analyzeImage(inputPath);
+          identifier = (result.identifier || '').trim().toLowerCase();
+        } catch (err) {
+          attempts++;
+          if (attempts >= maxAttempts) {
+            console.warn(`  Failed to get identifier for ${file} after ${maxAttempts} attempts: ${err.message}. Treating as single.`);
+          }
         }
-        groups.get(identifier).push(file);
-      } catch (err) {
-        console.warn(`  Failed to get identifier for ${file}: ${err.message}. Treating as single.`);
-        if (!groups.has('')) groups.set('', []);
-        groups.get('').push(file);
       }
+      console.log(`  ${file}: identifier="${identifier || '(none)'}"`);
+      if (!groups.has(identifier)) {
+        groups.set(identifier, []);
+      }
+      groups.get(identifier).push(file);
     }
     return groups;
   }
@@ -187,20 +198,29 @@ class WiringDiagramProcessor {
        }
      }
 
-     // Merge groups where needed
-     const finalResults = [];
-     const pathsToDelete = [];
+    // Merge groups where needed
+    const finalResults = [];
+    const pathsToDelete = [];
 
-     for (const [identifier, entries] of groupEntries) {
-       if (entries.length > 1) {
-         const merged = this.mergeGroupResults(identifier, entries.map(e => e.result));
-         finalResults.push(merged);
-         // Mark individual JSON files for deletion
-         entries.forEach(e => pathsToDelete.push(e.individualPath));
-       } else {
-         finalResults.push(entries[0].result);
-       }
-     }
+    for (const [identifier, entries] of groupEntries) {
+      if (entries.length > 1) {
+        const merged = this.mergeGroupResults(identifier, entries.map(e => e.result));
+        finalResults.push(merged);
+        // Write merged JSON file
+        let safeIdentifier = identifier.replace(/[\\/]/g, '_');
+        if (!safeIdentifier) {
+          const firstBase = path.basename(entries[0].individualPath, '.json');
+          safeIdentifier = `merged-${firstBase}`;
+        }
+        const mergedPath = path.join(outputDir, `${safeIdentifier}.json`);
+        fs.writeFileSync(mergedPath, JSON.stringify(merged));
+        console.log(`  ✓ Merged ${entries.length} images into: ${path.basename(mergedPath)}`);
+        // Mark individual JSON files for deletion
+        entries.forEach(e => pathsToDelete.push(e.individualPath));
+      } else {
+        finalResults.push(entries[0].result);
+      }
+    }
 
      // Write final JSONL
      for (const result of finalResults) {
