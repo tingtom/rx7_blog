@@ -24,14 +24,15 @@ export default {
       title: 'Description',
       type: 'text',
     },
-    {
-      name: 'diagramImage',
-      title: 'Diagram Image',
-      type: 'image',
-      options: {
-        hotspot: false,
-      },
-    },
+     {
+       name: 'diagramImages',
+       title: 'Diagram Images',
+       type: 'array',
+       of: [{ type: 'image' }],
+       options: {
+         hotspot: false,
+       },
+     },
     {
       name: 'category',
       title: 'Category',
@@ -71,17 +72,23 @@ export default {
       title: 'Notes',
       type: 'text',
     },
-    {
-      name: 'publishedAt',
-      title: 'Published at',
-      type: 'datetime',
-    },
+     {
+       name: 'identifier',
+       title: 'Identifier',
+       type: 'string',
+       description: 'Alphanumeric code from top-left corner used to group related diagrams',
+     },
+     {
+       name: 'publishedAt',
+       title: 'Published at',
+       type: 'datetime',
+     },
   ],
-  preview: {
-    select: {
-      title: 'title',
-      category: 'category',
-      media: 'diagramImage',
-    },
-  },
+   preview: {
+     select: {
+       title: 'title',
+       category: 'category',
+       media: 'diagramImages',
+     },
+   },
 }

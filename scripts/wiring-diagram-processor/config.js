@@ -38,6 +38,9 @@ module.exports = {
   inputDir: './diagrams-to-process',
   outputDir: './processed-diagrams',
   
-  // Whether to deduplicate array entries (connectors, etc.)
-  deduplicateArrays: true,
-};
+   // Whether to deduplicate array entries (connectors, etc.)
+   deduplicateArrays: true,
+   
+   // Group images by identifier extracted from top-left corner
+   groupByIdentifier: true,
+ };

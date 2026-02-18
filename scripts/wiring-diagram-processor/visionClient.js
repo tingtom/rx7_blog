@@ -258,6 +258,7 @@ IMPORTANT: Return ONLY valid JSON with these exact keys. Do not include markdown
 
 {
   "title": "Descriptive title including system and year if visible",
+  "identifier": "Alphanumeric code visible in top-left corner (e.g., 'Y', 'B-1a', '12A'). Empty string if none.",
   "wireColors": ["Red", "Black", "Green/White", ...],
   "components": ["ECU", "fuel pump", "starter motor", ...],
   "connectors": ["FPC", "EPC", "10P", "16P", ...],

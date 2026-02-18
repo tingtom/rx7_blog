@@ -32,71 +32,192 @@ class WiringDiagramProcessor {
     this.stats = { processed: 0, skipped: 0, errors: 0 };
   }
 
-  async processDirectory(inputDir, outputDir) {
-    // Ensure output directory exists
-    fs.mkdirSync(outputDir, { recursive: true });
+  async groupImagesByIdentifier(files, inputDir) {
+    const groups = new Map();
+    console.log('Grouping images by identifier...');
     
-    // For JSONL output: collect all results
-    const allResults = [];
-    const jsonlPath = path.join(outputDir, 'all-diagrams.jsonl');
-    // Clear existing JSONL file
-    if (fs.existsSync(jsonlPath)) fs.unlinkSync(jsonlPath);
-    
-    // Get all image files
-    const files = fs.readdirSync(inputDir)
-      .filter(f => /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(f));
-    
-    if (files.length === 0) {
-      console.log(`No images found in ${inputDir}`);
-      return;
-    }
-    
-    console.log(`Found ${files.length} images to process.`);
-    console.log(`Analysis model: ${config.analysis.provider}/${config.analysis.model}`);
-    if (this.translationClient) {
-      console.log(`Translation model: ${config.translation.provider}/${config.translation.model}`);
-    } else {
-      console.log('Translation: disabled (single-pass)');
-    }
-    console.log('');
-    
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      console.log(`[${i + 1}/${files.length}] Processing: ${file}`);
-      
+    for (const file of files) {
       const inputPath = path.join(inputDir, file);
-      const outputPath = path.join(outputDir, file.replace(/\.[^.]+$/, '.json'));
-      
-      // Skip if already processed
-      if (fs.existsSync(outputPath)) {
-        console.log('  Already exists, skipping.');
-        this.stats.skipped++;
-        // Still read existing file to add to JSONL
-        try {
-          const existing = JSON.parse(fs.readFileSync(outputPath, 'utf-8'));
-          allResults.push(existing);
-          fs.appendFileSync(jsonlPath, JSON.stringify(existing) + '\n');
-        } catch (e) {
-          // ignore
-        }
-        continue;
-      }
-      
       try {
-        const result = await this.processImage(inputPath, outputPath);
-        if (result) {
-          allResults.push(result);
-          // Append to JSONL (minified, one line)
-          fs.appendFileSync(jsonlPath, JSON.stringify(result) + '\n');
+        const analysisData = await this.analysisClient.analyzeImage(inputPath);
+        const identifier = (analysisData.identifier || '').trim().toLowerCase();
+        console.log(`  ${file}: identifier="${identifier}"`);
+        if (!groups.has(identifier)) {
+          groups.set(identifier, []);
         }
-        this.stats.processed++;
-      } catch (error) {
-        // Error already logged by processImage
-        this.stats.errors++;
+        groups.get(identifier).push(file);
+      } catch (err) {
+        console.warn(`  Failed to get identifier for ${file}: ${err.message}. Treating as single.`);
+        if (!groups.has('')) groups.set('', []);
+        groups.get('').push(file);
       }
     }
-    
-    console.log(`✓ JSONL written to: ${jsonlPath}`);
+    return groups;
+  }
+
+  mergeGroupResults(identifier, results) {
+    const merged = {
+      _type: 'wiringDiagram',
+      identifier: identifier || undefined,
+      imageFilenames: results.flatMap(r => r.imageFilenames || (r.imageFilename ? [r.imageFilename] : [])),
+      processedAt: new Date().toISOString()
+    };
+
+    let title = '', description = '', category = '', yearRange = '', notes = '';
+    const wireColors = new Set(), components = new Set(), connectors = new Set(), ecuPins = new Set();
+    let confidenceSum = 0, confidenceCount = 0;
+
+    for (const r of results) {
+      if (!title && r.title) title = r.title || '';
+      if (!description && r.description) description = r.description || '';
+      if (!category && r.category) category = r.category || '';
+      if (!yearRange && r.yearRange) yearRange = r.yearRange || '';
+      if (!notes && r.notes) notes = r.notes || '';
+
+      (r.wireColors || []).forEach(c => wireColors.add(c));
+      (r.components || []).forEach(c => components.add(c));
+      (r.connectors || []).forEach(c => connectors.add(c));
+      (r.ecuPins || []).forEach(c => ecuPins.add(c));
+
+      if (r.confidence !== undefined) {
+        confidenceSum += r.confidence;
+        confidenceCount++;
+      }
+    }
+
+    merged.wireColors = [...wireColors];
+    merged.components = [...components];
+    merged.connectors = [...connectors];
+    merged.ecuPins = [...ecuPins];
+    merged.title = title;
+    merged.description = description;
+    merged.category = category;
+    merged.yearRange = yearRange;
+    merged.notes = notes;
+
+    if (confidenceCount > 0) {
+      merged.confidence = confidenceSum / confidenceCount;
+    }
+
+    return merged;
+  }
+
+  async processDirectory(inputDir, outputDir) {
+     // Ensure output directory exists
+     fs.mkdirSync(outputDir, { recursive: true });
+
+     const allResults = [];
+     const jsonlPath = path.join(outputDir, 'all-diagrams.jsonl');
+     if (fs.existsSync(jsonlPath)) fs.unlinkSync(jsonlPath);
+
+     // Get all image files
+     const files = fs.readdirSync(inputDir)
+       .filter(f => /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(f));
+
+     if (files.length === 0) {
+       console.log(`No images found in ${inputDir}`);
+       return;
+     }
+
+     console.log(`Found ${files.length} images.`);
+     console.log(`Analysis model: ${config.analysis.provider}/${config.analysis.model}`);
+     if (this.translationClient) {
+       console.log(`Translation model: ${config.translation.provider}/${config.translation.model}`);
+     } else {
+       console.log('Translation: disabled (single-pass)');
+     }
+     console.log('');
+
+     // Group images by identifier if enabled, else each image alone
+     let groups;
+     if (config.groupByIdentifier) {
+       groups = await this.groupImagesByIdentifier(files, inputDir);
+     } else {
+       groups = new Map();
+       files.forEach(f => groups.set(f, [f]));
+     }
+
+     console.log(`Grouping resulted in ${groups.size} group(s):`);
+     for (const [id, groupFiles] of groups) {
+       console.log(`  ${id || '(no identifier)'}: ${groupFiles.length} image(s)`);
+     }
+     console.log('');
+
+     // Map to collect results and individual file paths for each group
+     const groupEntries = new Map(); // key: identifier -> array of { result, individualPath }
+
+     // Process each file (or read existing) and assign to groups
+     for (const [identifier, groupFiles] of groups) {
+       for (const file of groupFiles) {
+         const inputPath = path.join(inputDir, file);
+         const individualPath = path.join(outputDir, file.replace(/\.[^.]+$/, '.json'));
+         let result = null;
+         if (fs.existsSync(individualPath)) {
+           console.log(`  Skipped (already exists): ${file}`);
+           try {
+             result = JSON.parse(fs.readFileSync(individualPath, 'utf-8'));
+             // Normalize to new format if needed
+             if (result.imageFilename && !result.imageFilenames) {
+               result.imageFilenames = [result.imageFilename];
+             }
+             this.stats.skipped++;
+           } catch (readErr) {
+             console.warn(`  Failed to read existing result for ${file}: ${readErr.message}. Will reprocess.`);
+           }
+         }
+         if (!result) {
+           console.log(`  Processing: ${file}`);
+           try {
+             result = await this.processImage(inputPath, individualPath);
+             if (result) {
+               this.stats.processed++;
+             }
+           } catch (error) {
+             // Error already logged by processImage
+             this.stats.errors++;
+             result = null;
+           }
+         }
+         if (result) {
+           if (!groupEntries.has(identifier)) {
+             groupEntries.set(identifier, []);
+           }
+           groupEntries.get(identifier).push({ result, individualPath });
+         }
+       }
+     }
+
+     // Merge groups where needed
+     const finalResults = [];
+     const pathsToDelete = [];
+
+     for (const [identifier, entries] of groupEntries) {
+       if (entries.length > 1) {
+         const merged = this.mergeGroupResults(identifier, entries.map(e => e.result));
+         finalResults.push(merged);
+         // Mark individual JSON files for deletion
+         entries.forEach(e => pathsToDelete.push(e.individualPath));
+       } else {
+         finalResults.push(entries[0].result);
+       }
+     }
+
+     // Write final JSONL
+     for (const result of finalResults) {
+       fs.appendFileSync(jsonlPath, JSON.stringify(result) + '\n');
+     }
+
+     // Delete individual files for merged groups
+     for (const p of pathsToDelete) {
+       try {
+         fs.unlinkSync(p);
+         console.log(`  Deleted individual: ${path.basename(p)}`);
+       } catch (e) {
+         // ignore
+       }
+     }
+
+     console.log(`✓ JSONL written to: ${jsonlPath}`);
   }
   
   async processImage(imagePath, outputPath) {
@@ -177,13 +298,13 @@ class WiringDiagramProcessor {
         }
       }
       
-       // Add metadata
-       const result = {
-         ...data,
-         imageFilename: path.basename(imagePath),
-         processedAt: new Date().toISOString(),
-         _type: 'wiringDiagram',
-       };
+        // Add metadata
+        const result = {
+          ...data,
+          imageFilenames: [path.basename(imagePath)],
+          processedAt: new Date().toISOString(),
+          _type: 'wiringDiagram',
+        };
        
        // Save generated image if present
        if (generatedImageBase64) {
@@ -248,7 +369,7 @@ class WiringDiagramProcessor {
   
   async reviewResult(data) {
     console.log('\n----- Review Required -----');
-    console.log(`Image: ${data.imageFilename}`);
+    console.log(`Image: ${data.imageFilenames?.[0] || 'unknown'}`);
     console.log(`Confidence: ${(data.confidence * 100).toFixed(1)}%`);
     console.log(`Title: ${data.title}`);
     console.log(`Category: ${data.category || 'none'}`);
