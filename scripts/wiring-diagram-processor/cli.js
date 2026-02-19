@@ -21,7 +21,11 @@ CRITICAL INSTRUCTIONS:
 - Use standard automotive English terminology`;
 
 // Minimal prompt for extracting only the identifier from top-left corner
-const IDENTIFIER_PROMPT = `Analyze this Mazda RX-7 FD3S wiring diagram. Look for any alphanumeric code in the top-left corner (like Y, B-1a, 12A). Return ONLY valid JSON: {"identifier": "the code"} (empty string if none). Do not include any other text.`;
+const IDENTIFIER_PROMPT = `You are analyzing a page from a Mazda RX-7 FD3S wiring diagram manual. Look ONLY at the top-left corner of the page (the first 10% of width and height). There is often a small identifier printed there (e.g., "Y", "B-1a", "12A") that indicates which diagrams are related. This is NOT the page number.
+
+Extract that identifier. Respond with ONLY a JSON object: {"identifier": "the_identifier"}
+
+If no such identifier exists, respond with {"identifier": ""}. Do not include any other text.`;
 
 class WiringDiagramProcessor {
   constructor() {
@@ -121,9 +125,9 @@ class WiringDiagramProcessor {
      const jsonlPath = path.join(outputDir, 'all-diagrams.jsonl');
      if (fs.existsSync(jsonlPath)) fs.unlinkSync(jsonlPath);
 
-     // Get all image files
-     const files = fs.readdirSync(inputDir)
-       .filter(f => /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(f));
+     // Get all image files (deduplicate just in case)
+     const files = [...new Set(fs.readdirSync(inputDir)
+       .filter(f => /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(f)))];
 
      if (files.length === 0) {
        console.log(`No images found in ${inputDir}`);
@@ -202,25 +206,31 @@ class WiringDiagramProcessor {
     const finalResults = [];
     const pathsToDelete = [];
 
-    for (const [identifier, entries] of groupEntries) {
-      if (entries.length > 1) {
-        const merged = this.mergeGroupResults(identifier, entries.map(e => e.result));
-        finalResults.push(merged);
-        // Write merged JSON file
-        let safeIdentifier = identifier.replace(/[\\/]/g, '_');
-        if (!safeIdentifier) {
-          const firstBase = path.basename(entries[0].individualPath, '.json');
-          safeIdentifier = `merged-${firstBase}`;
-        }
-        const mergedPath = path.join(outputDir, `${safeIdentifier}.json`);
-        fs.writeFileSync(mergedPath, JSON.stringify(merged));
-        console.log(`  ✓ Merged ${entries.length} images into: ${path.basename(mergedPath)}`);
-        // Mark individual JSON files for deletion
-        entries.forEach(e => pathsToDelete.push(e.individualPath));
-      } else {
-        finalResults.push(entries[0].result);
-      }
-    }
+     for (const [identifier, entries] of groupEntries) {
+       // If identifier is empty and there are multiple images, treat them as separate singles
+       if (identifier === '' && entries.length > 1) {
+         for (const entry of entries) {
+           finalResults.push(entry.result);
+           // Keep individual JSON files; no merging, no deletion
+         }
+       } else if (entries.length > 1) {
+         const merged = this.mergeGroupResults(identifier, entries.map(e => e.result));
+         finalResults.push(merged);
+         // Write merged JSON file
+         let safeIdentifier = identifier.replace(/[\\/]/g, '_');
+         if (!safeIdentifier) {
+           const firstBase = path.basename(entries[0].individualPath, '.json');
+           safeIdentifier = `merged-${firstBase}`;
+         }
+         const mergedPath = path.join(outputDir, `${safeIdentifier}.json`);
+         fs.writeFileSync(mergedPath, JSON.stringify(merged));
+         console.log(`  ✓ Merged ${entries.length} images into: ${path.basename(mergedPath)}`);
+         // Mark individual JSON files for deletion
+         entries.forEach(e => pathsToDelete.push(e.individualPath));
+       } else {
+         finalResults.push(entries[0].result);
+       }
+     }
 
      // Write final JSONL
      for (const result of finalResults) {

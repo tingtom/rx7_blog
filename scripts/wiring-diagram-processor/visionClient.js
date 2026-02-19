@@ -257,7 +257,7 @@ class VisionClient {
 IMPORTANT: Return ONLY valid JSON with these exact keys. Do not include markdown or code block formatting.
 
 {
-  "title": "Descriptive title including system and year if visible",
+  "title": "Exact title text as printed on the diagram (copy verbatim). If in Japanese, translate to English.",
   "identifier": "Alphanumeric code visible in top-left corner (e.g., 'Y', 'B-1a', '12A'). Empty string if none.",
   "wireColors": ["Red", "Black", "Green/White", ...],
   "components": ["ECU", "fuel pump", "starter motor", ...],
